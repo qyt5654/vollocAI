@@ -1,0 +1,55 @@
+
+spring:
+  application:
+    name: heima-ai
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    username: root
+    password: 12345
+    url: jdbc:mysql://localhost:3306/deepai
+  data:
+    # redis配置
+    redis:
+      # Redis数据库索引（默认为0）
+      database: 2
+      # Redis服务器地址
+      host: 47.98.101.243
+      # Redis服务器连接端口
+      port: 6379
+      # 连接超时时间
+      timeout: 10s
+      lettuce:
+        pool:
+          # 连接池最大连接数
+          max-active: 200
+          # 连接池最大阻塞等待时间（使用负值表示没有限制）
+          max-wait: -1ms
+          # 连接池中的最大空闲连接
+          max-idle: 10
+          # 连接池中的最小空闲连接
+          min-idle: 0
+      username: default
+      password: YPCypc050717
+ai:
+  api:
+    key: "sk-y6Fjx7V2YtsEUEOAELMk4h1GJocPrKeBXT7LKDBIxDWAGGl4"
+    url: "https://www.ggwk1.online/v1/chat/completions"
+    model: "claude-3-7-sonnet-20250219-thinking"  #模型
+    stream: true     #流式
+
+sa-token:
+  token-name: satoken
+  timeout: 2592000
+  active-timeout: -1
+  is-concurrent: true
+  is-share: true
+  token-style: random-32
+  is-log: true
+  is-read-header: true
+logging:
+  level:
+    cn:
+      dev33:
+        satoken=DEBUG:
+server:
+  port: 8001
