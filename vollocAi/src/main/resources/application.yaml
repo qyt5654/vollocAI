@@ -1,4 +1,3 @@
-
 spring:
   application:
     name: heima-ai
@@ -53,3 +52,9 @@ logging:
         satoken=DEBUG:
 server:
   port: 8001
+rocketmq:
+  name-server: 127.0.0.1:9876   # ⚠ 替换为你的实际 NameServer 地址
+  producer:
+    group: test-producer-group
+  consumer:
+    group: test-consumer-group

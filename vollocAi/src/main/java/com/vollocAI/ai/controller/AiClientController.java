@@ -1,7 +1,9 @@
 package com.vollocAI.ai.controller;
 
 import cn.dev33.satoken.stp.StpUtil;
+import com.alibaba.fastjson.JSON;
 import com.google.common.base.Preconditions;
+import com.vollocAI.ai.annotation.RateLimit;
 import com.vollocAI.ai.config.AiClient;
 import com.vollocAI.ai.config.AiClientNew;
 import com.vollocAI.ai.context.LoginContextHolder;
@@ -10,15 +12,19 @@ import com.vollocAI.ai.service.DatabaseAiService;
 import com.vollocAI.ai.service.UserService;
 import com.vollocAI.ai.utils.LoginUtil;
 import jakarta.annotation.Resource;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
+import org.redisson.api.RedissonClient;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
-import reactor.core.publisher.Flux;
-
-import java.net.URL;
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/ai")
+@Slf4j
 public class AiClientController {
 
     @Resource
@@ -29,25 +35,43 @@ public class AiClientController {
     private UserService userService;
     @Resource
     private AiClientNew aiClientNew;
+    @Resource
+    private RedissonClient redissonClient;
+    @Autowired
+    private RocketMQTemplate rocketMQTemplate;
+    @Resource
+    private RedisTemplate redisTemplate;
+
+
+
+    @GetMapping("/{taskId}")
+    public Result<String> getAiAnswer(@PathVariable String taskId, @RequestHeader("satoken") String token){
+        log.info("taskId:{}", taskId);
+        log.info("token:{}", token);
+        String result = (String) redisTemplate.opsForValue().get("ai:result:" + taskId);
+        if (StringUtils.isEmpty(result)) {
+            return Result.ok(null); // 尚未完成
+        }
+        return Result.ok(result);
+    }
 
     /**
      * AI对话
      * @param questionDTO
      * @return
      */
+    @RateLimit(limit = 5,duration = 1)
     @PostMapping(value = "/ask")
     public Result<String> ask(@RequestBody QuestionDTO questionDTO) {
-        DatabaseAi databaseAi = new DatabaseAi();
-        databaseAi.setUserId(Long.valueOf(StpUtil.getLoginIdAsString())); // 直接使用父线程的 loginId
-        databaseAi.setId(questionDTO.getId());
-        List<DatabaseAi> databaseAis = databaseAiService.selectByDatabaseAi(databaseAi);
-
-        QuestionBO questionBO = new QuestionBO();
-        questionBO.setQuestion(questionDTO.getQuestion());
-        questionBO.setAiApiKey(databaseAis.get(0).getAiApiKey());
-        questionBO.setAiApiUrl(databaseAis.get(0).getAiApiUrl());
-        questionBO.setAiApiModel(databaseAis.get(0).getAiApiModel());
-        return Result.ok(aiClientNew.sendMessage(questionBO));
+        AiTaskMessage aiTaskMessage = new AiTaskMessage();
+        aiTaskMessage.setMessage(questionDTO.getQuestion());
+        String taskId = UUID.randomUUID().toString();
+        aiTaskMessage.setTaskId(taskId);
+        aiTaskMessage.setUserId(Long.valueOf(StpUtil.getLoginIdAsString()));
+        aiTaskMessage.setModelId(questionDTO.getId());
+        log.info(aiTaskMessage.toString());
+        rocketMQTemplate.convertAndSend("ai-task-topic-message", JSON.toJSONString(aiTaskMessage));
+        return Result.ok(taskId);
     }
 
     /**
@@ -55,19 +79,17 @@ public class AiClientController {
      * @param questionDTO
      * @return
      */
+    @RateLimit(limit = 5,duration = 1)
     @PostMapping(value = "/askImg")
-    public Result<URL> askImg(@RequestBody QuestionDTO questionDTO) {
-        DatabaseAi databaseAi = new DatabaseAi();
-        databaseAi.setUserId(Long.valueOf(StpUtil.getLoginIdAsString())); // 直接使用父线程的 loginId
-        databaseAi.setId(questionDTO.getId());
-        List<DatabaseAi> databaseAis = databaseAiService.selectByDatabaseAi(databaseAi);
-
-        QuestionBO questionBO = new QuestionBO();
-        questionBO.setQuestion(questionDTO.getQuestion());
-        questionBO.setAiApiKey(databaseAis.get(0).getAiApiKey());
-        questionBO.setAiApiUrl(databaseAis.get(0).getAiApiUrl());
-        questionBO.setAiApiModel(databaseAis.get(0).getAiApiModel());
-        return Result.ok(aiClientNew.askImg(questionBO));
+    public Result<String> askImg(@RequestBody QuestionDTO questionDTO) {
+        AiTaskMessage aiTaskMessage = new AiTaskMessage();
+        aiTaskMessage.setMessage(questionDTO.getQuestion());
+        String taskId = UUID.randomUUID().toString();
+        aiTaskMessage.setTaskId(taskId);
+        aiTaskMessage.setUserId(Long.valueOf(StpUtil.getLoginIdAsString()));
+        aiTaskMessage.setModelId(questionDTO.getId());
+        rocketMQTemplate.convertAndSend("ai-task-topic-img", JSON.toJSONString(aiTaskMessage));
+        return Result.ok(taskId);
     }
 
     /**

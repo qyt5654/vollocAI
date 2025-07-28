@@ -55,4 +55,12 @@ public class Result<T> {
         result.setMessage(message);
         return result;
     }
+
+    public static Result error(Integer code, String message){
+        Result result = new Result();
+        result.setSuccess(false);
+        result.setCode(code);
+        result.setMessage(message);
+        return result;
+    }
 }

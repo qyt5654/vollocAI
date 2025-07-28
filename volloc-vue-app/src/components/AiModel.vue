@@ -87,32 +87,56 @@
       alert('模型获取失败')
     }
   })
-     
+
   async function sendMessage() {
     if (!question.value.trim() || !selectedModelId.value) return
-       
+
     const userMsg = question.value.trim()
     messages.value.push({ role: 'user', content: userMsg })
     question.value = ''
     loading.value = true
-       
+
     try {
       const res = await axios.post('http://127.0.0.1:8001/ai/ask', {
         question: userMsg,
         id: selectedModelId.value
       })
-      if (res.data.success) {
-        messages.value.push({ role: 'ai', content: res.data.data })
+
+      const result = res.data
+
+      if (result.code === 200) {
+        const taskId = result.data
+        messages.value.push({ role: 'ai', content: '🤖 AI 正在思考，请稍候...' })
+
+        // 每 2 秒轮询一次结果（或使用 WebSocket 替代）
+        const interval = setInterval(async () => {
+          console.log(taskId)
+          const pollRes = await axios.get(`http://127.0.0.1:8001/ai/${taskId}`)
+          const data = pollRes.data
+          console.log(data)
+          if (data.code === 200 && data.data != null) {
+            messages.value.pop() // 删除“正在思考”
+            messages.value.push({ role: 'ai', content: data.data })
+            clearInterval(interval)
+          } else if (data.code !== 200) {
+            messages.value.pop()
+            messages.value.push({ role: 'ai', content: '❌ AI 回复失败，请稍后重试' })
+            clearInterval(interval)
+          }
+        }, 2000)
       } else {
-        messages.value.push({ role: 'ai', content: 'AI 无法回复，请稍后再试。' })
+        messages.value.push({
+          role: 'ai',
+          content: `❌ 出错：${result.message || 'AI 无法回复'}`
+        })
       }
     } catch (err) {
-      messages.value.push({ role: 'ai', content: '请求失败：' + err.message })
+      messages.value.push({
+        role: 'ai',
+        content: `❌ 请求异常：${err.response?.data?.message || err.message}`
+      })
     } finally {
       loading.value = false
-      nextTick(() => {
-        chatContentRef.value.scrollTop = chatContentRef.value.scrollHeight
-      })
     }
   }
   
@@ -129,11 +153,29 @@
         question: userMsg,
         id: selectedModelId.value
       })
-      if (res.data.success) {
-        messages.value.push({ role: 'image', content: res.data.data })
-      } else {
-        messages.value.push({ role: 'ai', content: '图片生成失败，请稍后再试。' })
+      if (res.data.code === 200) {
+        const taskId = res.data.data
+        messages.value.push({ role: 'ai', content: '🖼️ 正在生成图片，请稍候...' })
+
+        const interval = setInterval(async () => {
+          const pollRes = await axios.get(`http://127.0.0.1:8001/ai/${taskId}`)
+          const data = pollRes.data
+          if (data.code === 200 && data.data != null) {
+            messages.value.pop()
+            messages.value.push({ role: 'image', content: data.data }) // 图片 URL 或 base64
+            clearInterval(interval)
+          } else if (data.code !== 200) {
+            messages.value.pop()
+            messages.value.push({ role: 'ai', content: '❌ 图片生成失败，请稍后重试' })
+            clearInterval(interval)
+          }
+        }, 2000)
       }
+      // if (res.data.success) {
+      //   messages.value.push({ role: 'image', content: res.data.data })
+      // } else {
+      //   messages.value.push({ role: 'ai', content: '图片生成失败，请稍后再试。' })
+      // }
     } catch (err) {
       messages.value.push({ role: 'ai', content: '请求失败：' + err.message })
     } finally {

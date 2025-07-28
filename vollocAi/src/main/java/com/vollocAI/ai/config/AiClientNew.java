@@ -9,6 +9,7 @@ import dev.langchain4j.model.output.Response;
 import org.springframework.stereotype.Component;
 
 import java.net.URI;
+import java.util.HashMap;
 
 @Component
 public class AiClientNew {
@@ -38,5 +39,7 @@ public class AiClientNew {
         System.out.println(response.content().url());
         return response.content().url();
     }
+
+
 
 }
