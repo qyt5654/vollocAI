@@ -1,5 +1,6 @@
 package com.vollocAI.ai.test;
 
+import com.google.common.collect.Lists;
 import dev.langchain4j.data.image.Image;
 import dev.langchain4j.data.message.AiMessage;
 import dev.langchain4j.model.StreamingResponseHandler;
@@ -10,6 +11,10 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.openai.OpenAiImageModel;
 import dev.langchain4j.model.openai.OpenAiStreamingChatModel;
 import dev.langchain4j.model.output.Response;
+import org.apache.commons.collections.MapUtils;
+import cn.hutool.core.map.MapUtil;
+
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /***
@@ -69,14 +74,48 @@ public class HelloAI {
 
     //ai生图
     public static void main(String[] args) {
-        ImageModel imageModel = OpenAiImageModel.builder()
-                .baseUrl("https://www.ggwk1.online/v1")
-                .apiKey("sk-ggLnerEAlP4aEV1FbIiYTiZWgnwptA3iLss6e0nOyDqKaYcW")
-                .modelName("gpt-4-0613")
-                .build();
-        Response<Image> response = imageModel.generate("一只兔子");
-        System.out.println(response.content().url());
+//        ImageModel imageModel = OpenAiImageModel.builder()
+//                .baseUrl("https://www.ggwk1.online/v1")
+//                .apiKey("sk-ggLnerEAlP4aEV1FbIiYTiZWgnwptA3iLss6e0nOyDqKaYcW")
+//                .modelName("gpt-4-0613")
+//                .build();
+//        Response<Image> response = imageModel.generate("一只兔子");
+//        System.out.println(response.content().url());
 
+        System.out.println(findAnagrams("cbaebabacd", "abc"));
+    }
+
+    /**
+     * 输入：nums = [-1,0,1,2,-1,-4]
+     * 输出：[[-1,-1,2],[-1,0,1]]
+     * @return
+     */
+    private static List<Integer> findAnagrams(String s, String p) {
+        Map<String, Integer> map = new HashMap<String, Integer>();
+        Map<String, Integer> map1 = new HashMap<String, Integer>();
+        int num = 1;
+
+        int sum = 0;
+        for(int i=0;i<p.length();i++){
+            char pt = p.charAt(i);
+            Integer c = map.get("" + pt);
+            sum+=c;
+        }
+        System.out.println(sum);
+        List<Integer> list = new ArrayList<>();
+        int nnm = 0;
+        for(int i=0;i<s.length();i++){
+            char pt = s.charAt(i);
+            Integer c = map.get("" + pt);
+            nnm+=c;
+            if(i>p.length()-1){
+                nnm-=map.get("" + s.charAt(i-p.length()));
+            }
+            if(nnm == sum && i>=p.length()-1){
+                list.add(i-p.length()+1);
+            }
+        }
+        return list;
     }
 }
 
