@@ -10,7 +10,6 @@ import com.vollocAI.ai.context.LoginContextHolder;
 import com.vollocAI.ai.entity.*;
 import com.vollocAI.ai.service.DatabaseAiService;
 import com.vollocAI.ai.service.UserService;
-import com.vollocAI.ai.utils.LoginUtil;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
@@ -100,7 +99,7 @@ public class AiClientController {
     public Result<List<Long>> selectByUserId(@RequestHeader("satoken") String token){
         System.out.println("前端传过来的 token 是：" + token);
         DatabaseAi databaseAi = new DatabaseAi();
-        databaseAi.setUserId(LoginUtil.getLoginId());
+        databaseAi.setUserId(LoginContextHolder.getLoginId());
         List<DatabaseAi> databaseAis = databaseAiService.selectByDatabaseAi(databaseAi);
         List<DatabaseAiDTO> modelIds = databaseAis.stream().map(databaseAiInfo ->{
             Long id = databaseAiInfo.getId();
