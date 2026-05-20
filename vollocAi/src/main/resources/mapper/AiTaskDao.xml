@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vollocAI.ai.dao.AiTaskDao">
+
+    <resultMap type="com.vollocAI.ai.entity.AiTask" id="AiTaskMap">
+        <result property="id" column="id" jdbcType="BIGINT"/>
+        <result property="taskId" column="task_id" jdbcType="VARCHAR"/>
+        <result property="userId" column="user_id" jdbcType="BIGINT"/>
+        <result property="query" column="query" jdbcType="VARCHAR"/>
+        <result property="intent" column="intent" jdbcType="VARCHAR"/>
+        <result property="result" column="result" jdbcType="VARCHAR"/>
+        <result property="status" column="status" jdbcType="VARCHAR"/>
+        <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
+        <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
+    </resultMap>
+
+    <select id="queryById" resultMap="AiTaskMap">
+        select id, task_id, user_id, query, intent, result, status, create_time, update_time
+        from ai_task where id = #{id}
+    </select>
+
+    <select id="queryByTaskId" resultMap="AiTaskMap">
+        select id, task_id, user_id, query, intent, result, status, create_time, update_time
+        from ai_task where task_id = #{taskId}
+    </select>
+
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        insert into ai_task(task_id, user_id, query, intent, result, status, create_time, update_time)
+        values (#{taskId}, #{userId}, #{query}, #{intent}, #{result}, #{status}, now(), now())
+    </insert>
+
+    <update id="update">
+        update ai_task
+        <set>
+            <if test="intent != null">intent = #{intent},</if>
+            <if test="result != null">result = #{result},</if>
+            <if test="status != null">status = #{status},</if>
+            update_time = now()
+        </set>
+        where task_id = #{taskId}
+    </update>
+
+    <update id="updateStatus">
+        update ai_task set status = #{status}, update_time = now()
+        where task_id = #{taskId}
+    </update>
+
+    <select id="queryTimeoutPending" resultMap="AiTaskMap">
+        select id, task_id, user_id, query, intent, result, status, create_time, update_time
+        from ai_task
+        where status = #{status} and create_time &lt; #{deadline}
+        limit 100
+    </select>
+
+</mapper>
