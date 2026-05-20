@@ -50,6 +50,21 @@ logging:
     cn:
       dev33:
         satoken=DEBUG:
+  autoconfigure:
+    exclude: org.springframework.ai.autoconfigure.openai.OpenAiAutoConfiguration
+  ai:
+    dashscope:
+      api-key: sk-5cc256809ca44b02b6c1921785639068
+      chat:
+        options:
+          model: qwen3-max
+      tts:
+        options:
+          model: sambert-zhichu-v1
+      image:
+        options:
+          model: wanx-v1
+
 server:
   port: 8001
 rocketmq:

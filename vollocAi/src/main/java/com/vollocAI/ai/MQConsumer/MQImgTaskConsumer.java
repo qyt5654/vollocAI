@@ -1,12 +1,10 @@
 package com.vollocAI.ai.MQConsumer;
 
-
 import com.alibaba.fastjson.JSON;
-import com.vollocAI.ai.config.AiClientNew;
+import com.vollocAI.ai.entity.AiTask;
 import com.vollocAI.ai.entity.AiTaskMessage;
-import com.vollocAI.ai.entity.DatabaseAi;
-import com.vollocAI.ai.entity.QuestionBO;
-import com.vollocAI.ai.service.DatabaseAiService;
+import com.vollocAI.ai.service.AiTaskService;
+import com.vollocAI.ai.service.MultimodalAIService;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.rocketmq.spring.annotation.RocketMQMessageListener;
@@ -19,7 +17,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 获取图片消费者
+ * 图片生成消费者
  */
 @Slf4j
 @Component
@@ -27,35 +25,45 @@ import java.util.concurrent.TimeUnit;
 public class MQImgTaskConsumer implements RocketMQListener<String> {
 
     @Resource
-    private DatabaseAiService databaseAiService;
+    private MultimodalAIService multimodalAIService;
+
     @Resource
-    private AiClientNew aiClientNew;
+    private AiTaskService aiTaskService;
+
     @Resource(name = "aiThreadPool")
     private ThreadPoolExecutor aiThreadPool;
+
     @Resource
     private RedisTemplate redisTemplate;
 
     @Override
     public void onMessage(String s) {
-        aiThreadPool.execute(()->{
-            log.info("接收到询问主体：" + s);
+        aiThreadPool.execute(() -> {
             AiTaskMessage aiTaskMessage = JSON.parseObject(s, AiTaskMessage.class);
-            DatabaseAi databaseAi = new DatabaseAi();
-            databaseAi.setUserId(aiTaskMessage.getUserId()); // 直接使用父线程的 loginId
-            databaseAi.setId(aiTaskMessage.getModelId());
-            List<DatabaseAi> databaseAis = databaseAiService.selectByDatabaseAi(databaseAi);
+            String taskId = aiTaskMessage.getTaskId();
+            log.info("图片消费者收到消息 taskId:{}", taskId);
 
-            QuestionBO questionBO = new QuestionBO();
-            questionBO.setQuestion(aiTaskMessage.getMessage());
-            questionBO.setAiApiKey(databaseAis.get(0).getAiApiKey());
-            questionBO.setAiApiUrl(databaseAis.get(0).getAiApiUrl());
-            questionBO.setAiApiModel(databaseAis.get(0).getAiApiModel());
-            String answer = aiClientNew.askImg(questionBO).toString();
+            // 1. 更新状态为 PROCESSING
+            aiTaskService.updateStatus(taskId, AiTask.STATUS_PROCESSING);
 
-            //将图片路径存入redis中
-            redisTemplate.opsForValue().set("ai:result:" + aiTaskMessage.getTaskId(), answer, 10, TimeUnit.MINUTES);
+            try {
+                // 2. 图片生成
+                String imageUrl = multimodalAIService.generateImage(aiTaskMessage.getMessage(), List.of());
+                log.info("图片生成完成 taskId:{} url:{}", taskId, imageUrl);
+
+                // 3. 结果写入 Redis + 更新 DB
+                redisTemplate.opsForValue().set("ai:result:" + taskId, imageUrl, 10, TimeUnit.MINUTES);
+
+                AiTask completed = new AiTask();
+                completed.setTaskId(taskId);
+                completed.setResult(imageUrl);
+                completed.setStatus(AiTask.STATUS_COMPLETED);
+                aiTaskService.update(completed);
+
+            } catch (Exception e) {
+                log.error("图片任务执行失败 taskId:{}", taskId, e);
+                aiTaskService.updateStatus(taskId, AiTask.STATUS_FAILED);
+            }
         });
-
-
     }
 }
