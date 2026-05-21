@@ -9,6 +9,8 @@ import com.vollocAI.ai.entity.User;
 import com.vollocAI.ai.service.UserService;
 import jakarta.annotation.Resource;
 import org.apache.commons.lang3.StringUtils;
+import java.util.Map;
+
 import org.springframework.web.bind.annotation.*;
 
 /**
@@ -35,14 +37,13 @@ public class UserController {
     public Result doLogin(@RequestBody User user) {
         Preconditions.checkArgument(!StringUtils.isBlank(user.getUsername()), "用户名不能为空");
         Preconditions.checkArgument(!StringUtils.isBlank(user.getPassword()), "密码不能为空");
-        //从数据库中查询数据进行比对
-        Long id = userService.doLogin(user);
-        if(id != null) {
-            StpUtil.login(id);
+        User loginUser = userService.doLogin(user);
+        if (loginUser != null) {
+            StpUtil.login(loginUser.getId());
             SaTokenInfo tokenInfo = StpUtil.getTokenInfo();
-            LoginContextHolder.set("loginId",id);
-            System.out.println(LoginContextHolder.getLoginId());
-            return Result.ok(tokenInfo);
+            LoginContextHolder.set("loginId", loginUser.getId());
+            String role = "1".equals(loginUser.getManager()) ? "admin" : "user";
+            return Result.ok(Map.of("tokenName", tokenInfo.getTokenName(), "tokenValue", tokenInfo.getTokenValue(), "role", role));
         }
         return Result.fail("登录失败");
     }

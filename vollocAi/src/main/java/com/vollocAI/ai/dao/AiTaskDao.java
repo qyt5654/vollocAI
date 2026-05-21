@@ -10,8 +10,6 @@ import java.util.List;
 @Mapper
 public interface AiTaskDao {
 
-    AiTask queryById(Long id);
-
     AiTask queryByTaskId(@Param("taskId") String taskId);
 
     int insert(AiTask aiTask);

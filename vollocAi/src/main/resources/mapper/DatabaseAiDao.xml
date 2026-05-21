@@ -42,28 +42,6 @@
         </where>
     </select>
 
-    <!--统计总行数-->
-    <select id="count" resultType="java.lang.Long">
-        select count(1)
-        from database_ai
-        <where>
-            <if test="id != null">
-                and id = #{id}
-            </if>
-            <if test="aiApiKey != null and aiApiKey != ''">
-                and ai_api_key = #{aiApiKey}
-            </if>
-            <if test="aiApiUrl != null and aiApiUrl != ''">
-                and ai_api_url = #{aiApiUrl}
-            </if>
-            <if test="aiApiModel != null and aiApiModel != ''">
-                and ai_api_model = #{aiApiModel}
-            </if>
-            <if test="userId != null">
-                and user_id = #{userId}
-            </if>
-        </where>
-    </select>
     <select id="selectByDatabaseAi" resultType="com.vollocAI.ai.entity.DatabaseAi">
         select * from database_ai
         <where>
@@ -89,27 +67,6 @@
     <insert id="insert" keyProperty="id" useGeneratedKeys="true">
         insert into database_ai(ai_api_key,ai_api_url,ai_api_model,user_id)
         values (#{aiApiKey},#{aiApiUrl},#{aiApiModel},#{userId})
-    </insert>
-
-    <insert id="insertBatch" keyProperty="id" useGeneratedKeys="true">
-        insert into database_ai(ai_api_key,ai_api_url,ai_api_model,user_id)
-        values
-        <foreach collection="entities" item="entity" separator=",">
-        (#{entity.aiApiKey},#{entity.aiApiUrl},#{entity.aiApiModel},#{entity.userId})
-        </foreach>
-    </insert>
-
-    <insert id="insertOrUpdateBatch" keyProperty="id" useGeneratedKeys="true">
-        insert into database_ai(ai_api_key,ai_api_url,ai_api_model,user_id)
-        values
-        <foreach collection="entities" item="entity" separator=",">
-            (#{entity.aiApiKey},#{entity.aiApiUrl},#{entity.aiApiModel},#{entity.userId})
-        </foreach>
-        on duplicate key update
-        ai_api_key = values(ai_api_key),
-        ai_api_url = values(ai_api_url),
-        ai_api_model = values(ai_api_model),
-        user_id = values(user_id)
     </insert>
 
     <!--通过主键修改数据-->

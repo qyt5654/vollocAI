@@ -64,26 +64,6 @@
         values (#{username},#{manager},#{password})
     </insert>
 
-    <insert id="insertBatch" keyProperty="id" useGeneratedKeys="true">
-        insert into user(username,manager,password)
-        values
-        <foreach collection="entities" item="entity" separator=",">
-        (#{entity.username},#{entity.manager},#{entity.password})
-        </foreach>
-    </insert>
-
-    <insert id="insertOrUpdateBatch" keyProperty="id" useGeneratedKeys="true">
-        insert into user(username,manager,password)
-        values
-        <foreach collection="entities" item="entity" separator=",">
-            (#{entity.username},#{entity.manager},#{entity.password})
-        </foreach>
-        on duplicate key update
-        username = values(username),
-        manager = values(manager),
-        password = values(password)
-    </insert>
-
     <!--通过主键修改数据-->
     <update id="update">
         update user

@@ -4,9 +4,8 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.alibaba.fastjson.JSON;
 import com.google.common.base.Preconditions;
 import com.vollocAI.ai.annotation.RateLimit;
-import com.vollocAI.ai.config.AiClient;
-import com.vollocAI.ai.config.AiClientNew;
 import com.vollocAI.ai.context.LoginContextHolder;
+import com.vollocAI.ai.dao.ModelAssignmentDao;
 import com.vollocAI.ai.entity.*;
 import com.vollocAI.ai.service.AiTaskService;
 import com.vollocAI.ai.service.DatabaseAiService;
@@ -15,73 +14,32 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
-import org.redisson.api.RedissonClient;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/ai")
 @Slf4j
 public class AiClientController {
 
-    @Resource
-    private AiClient aiClient;
-    @Resource
-    private DatabaseAiService databaseAiService;
-    @Resource
-    private UserService userService;
-    @Resource
-    private AiClientNew aiClientNew;
-    @Resource
-    private RedissonClient redissonClient;
-    @Autowired
-    private RocketMQTemplate rocketMQTemplate;
-    @Resource
-    private RedisTemplate redisTemplate;
-    @Resource
-    private AiTaskService aiTaskService;
+    @Resource private DatabaseAiService databaseAiService;
+    @Resource private UserService userService;
+    @Resource private RocketMQTemplate rocketMQTemplate;
+    @Resource private RedisTemplate redisTemplate;
+    @Resource private AiTaskService aiTaskService;
+    @Resource private ModelAssignmentDao modelAssignmentDao;
 
-    /**
-     * 获取 AI 结果：优先 Redis，兜底 DB
-     */
-    @GetMapping("/{taskId}")
-    public Result<String> getAiAnswer(@PathVariable String taskId, @RequestHeader("satoken") String token) {
-        log.info("查询任务结果 taskId:{}", taskId);
+    // ==================== 对话 ====================
 
-        // 1. 优先从 Redis 获取
-        String result = (String) redisTemplate.opsForValue().get("ai:result:" + taskId);
-        if (StringUtils.isNotEmpty(result)) {
-            return Result.ok(result);
-        }
-
-        // 2. Redis 未命中，降级查 DB
-        AiTask aiTask = aiTaskService.queryByTaskId(taskId);
-        if (aiTask == null) {
-            return Result.ok(null);
-        }
-        if (AiTask.STATUS_COMPLETED.equals(aiTask.getStatus())) {
-            return Result.ok(aiTask.getResult());
-        }
-        if (AiTask.STATUS_FAILED.equals(aiTask.getStatus())) {
-            return Result.fail("任务执行失败");
-        }
-        return Result.ok(null);
-    }
-
-    /**
-     * AI 对话：落库 → 发送 MQ → 返回 taskId
-     */
     @RateLimit(limit = 5, duration = 1)
-    @PostMapping(value = "/ask")
-    public Result<String> ask(@RequestBody QuestionDTO questionDTO) {
+    @PostMapping("/chat")
+    public Result<String> chat(@RequestBody QuestionDTO questionDTO) {
         String taskId = UUID.randomUUID().toString();
         Long userId = Long.valueOf(StpUtil.getLoginIdAsString());
 
-        // 1. 落库任务（PENDING）
         AiTask aiTask = new AiTask();
         aiTask.setTaskId(taskId);
         aiTask.setUserId(userId);
@@ -90,83 +48,120 @@ public class AiClientController {
         aiTaskService.insert(aiTask);
         log.info("任务入库 PENDING: {}", taskId);
 
-        // 2. 发送 MQ
-        AiTaskMessage aiTaskMessage = new AiTaskMessage();
-        aiTaskMessage.setMessage(questionDTO.getQuestion());
-        aiTaskMessage.setTaskId(taskId);
-        aiTaskMessage.setUserId(userId);
-        aiTaskMessage.setModelId(questionDTO.getId());
-        rocketMQTemplate.convertAndSend("ai-task-topic-message", JSON.toJSONString(aiTaskMessage));
+        AiTaskMessage msg = new AiTaskMessage();
+        msg.setMessage(questionDTO.getQuestion());
+        msg.setTaskId(taskId);
+        msg.setUserId(userId);
+        msg.setModelId(questionDTO.getId());
+        rocketMQTemplate.convertAndSend("ai-task-topic", JSON.toJSONString(msg));
 
         return Result.ok(taskId);
     }
 
-    /**
-     * AI 图片生成：落库 → 发送 MQ → 返回 taskId
-     */
-    @RateLimit(limit = 5, duration = 1)
-    @PostMapping(value = "/askImg")
-    public Result<String> askImg(@RequestBody QuestionDTO questionDTO) {
-        String taskId = UUID.randomUUID().toString();
-        Long userId = Long.valueOf(StpUtil.getLoginIdAsString());
-
-        // 1. 落库任务（PENDING）
-        AiTask aiTask = new AiTask();
-        aiTask.setTaskId(taskId);
-        aiTask.setUserId(userId);
-        aiTask.setQuery(questionDTO.getQuestion());
-        aiTask.setIntent("image");
-        aiTask.setStatus(AiTask.STATUS_PENDING);
-        aiTaskService.insert(aiTask);
-        log.info("图片任务入库 PENDING: {}", taskId);
-
-        // 2. 发送 MQ
-        AiTaskMessage aiTaskMessage = new AiTaskMessage();
-        aiTaskMessage.setMessage(questionDTO.getQuestion());
-        aiTaskMessage.setTaskId(taskId);
-        aiTaskMessage.setUserId(userId);
-        aiTaskMessage.setModelId(questionDTO.getId());
-        rocketMQTemplate.convertAndSend("ai-task-topic-img", JSON.toJSONString(aiTaskMessage));
-
-        return Result.ok(taskId);
+    @GetMapping("/result/{taskId}")
+    public Result<String> getResult(@PathVariable String taskId, @RequestHeader("satoken") String token) {
+        String result = (String) redisTemplate.opsForValue().get("ai:result:" + taskId);
+        if (StringUtils.isNotEmpty(result)) return Result.ok(result);
+        AiTask aiTask = aiTaskService.queryByTaskId(taskId);
+        if (aiTask == null) return Result.ok(null);
+        if (AiTask.STATUS_COMPLETED.equals(aiTask.getStatus())) return Result.ok(aiTask.getResult());
+        if (AiTask.STATUS_FAILED.equals(aiTask.getStatus())) return Result.fail("任务执行失败");
+        return Result.ok(null);
     }
 
-    /**
-     * 查询该用户所拥有的模型
-     */
+    // ==================== 普通用户：我的模型 ====================
+
     @GetMapping("/selectModelByUserId")
-    public Result<List<Long>> selectByUserId(@RequestHeader("satoken") String token) {
-        System.out.println("前端传过来的 token 是：" + token);
-        DatabaseAi databaseAi = new DatabaseAi();
-        databaseAi.setUserId(LoginContextHolder.getLoginId());
-        List<DatabaseAi> databaseAis = databaseAiService.selectByDatabaseAi(databaseAi);
-        List<DatabaseAiDTO> modelIds = databaseAis.stream().map(databaseAiInfo -> {
-            Long id = databaseAiInfo.getId();
-            String aiApiModel = databaseAiInfo.getAiApiModel();
-            return new DatabaseAiDTO(id, aiApiModel);
-        }).toList();
-        return Result.ok(modelIds);
+    public Result<List<DatabaseAiDTO>> selectByUserId() {
+        Long userId = LoginContextHolder.getLoginId();
+        List<Long> modelIds = modelAssignmentDao.findModelIdsByUserId(userId);
+        List<DatabaseAiDTO> result = new ArrayList<>();
+        for (Long mid : modelIds) {
+            DatabaseAi m = databaseAiService.queryById(mid);
+            if (m != null) result.add(new DatabaseAiDTO(m.getId(), m.getAiApiModel()));
+        }
+        return Result.ok(result);
     }
 
-    /**
-     * 插入模型
-     */
-    @PostMapping("/addModel")
-    public Result addModel(@RequestBody DatabaseAi databaseAi) {
-        Preconditions.checkArgument(!StringUtils.isBlank(databaseAi.getAiApiKey()), "AIKey不能为空");
-        Preconditions.checkArgument(!StringUtils.isBlank(databaseAi.getAiApiUrl()), "Url不能为空");
-        Preconditions.checkArgument(!StringUtils.isBlank(databaseAi.getAiApiModel()), "模型不能为空");
-        Preconditions.checkNotNull(databaseAi.getUserId(), "所属用户不能为空");
-        User user = userService.queryById(LoginContextHolder.getLoginId());
-        System.out.println(user);
-        if (user.getManager().equals("0")) {
-            return Result.fail("没有权限");
-        }
-        int insert = databaseAiService.insert(databaseAi);
-        if (insert > 0) {
-            return Result.ok("插入成功");
-        } else {
-            return Result.fail("插入失败");
-        }
+    // ==================== 管理员 ====================
+
+    private void requireAdmin() {
+        Long loginId = LoginContextHolder.getLoginId();
+        User user = userService.queryById(loginId);
+        if (!"1".equals(user.getManager())) throw new RuntimeException("无权限");
     }
+
+    // ---- 模型管理 ----
+
+    @GetMapping("/admin/models")
+    public Result<List<Map<String, Object>>> listAllModels() {
+        requireAdmin();
+        List<DatabaseAi> models = databaseAiService.selectByDatabaseAi(new DatabaseAi());
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (DatabaseAi m : models) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", m.getId());
+            item.put("aiApiModel", m.getAiApiModel());
+            item.put("aiApiUrl", m.getAiApiUrl());
+            item.put("assignedUserIds", modelAssignmentDao.findUserIdsByModelId(m.getId()));
+            result.add(item);
+        }
+        return Result.ok(result);
+    }
+
+    @PostMapping("/admin/models")
+    public Result addModel(@RequestBody DatabaseAi model) {
+        requireAdmin();
+        Preconditions.checkArgument(!StringUtils.isBlank(model.getAiApiKey()), "Key 不能为空");
+        Preconditions.checkArgument(!StringUtils.isBlank(model.getAiApiUrl()), "URL 不能为空");
+        Preconditions.checkArgument(!StringUtils.isBlank(model.getAiApiModel()), "模型名不能为空");
+        model.setUserId(0L);
+        databaseAiService.insert(model);
+        return Result.ok("添加成功");
+    }
+
+    @PutMapping("/admin/models/{id}")
+    public Result updateModel(@PathVariable Long id, @RequestBody DatabaseAi model) {
+        requireAdmin();
+        model.setId(id);
+        databaseAiService.update(model);
+        return Result.ok("修改成功");
+    }
+
+    @DeleteMapping("/admin/models/{id}")
+    public Result deleteModel(@PathVariable Long id) {
+        requireAdmin();
+        modelAssignmentDao.deleteByModelId(id);
+        databaseAiService.deleteById(id);
+        return Result.ok("删除成功");
+    }
+
+    // ---- 分配管理 ----
+
+    @PostMapping("/admin/assign")
+    public Result assignModel(@RequestBody AssignRequest req) {
+        requireAdmin();
+        ModelAssignment a = new ModelAssignment();
+        a.setModelId(req.modelId);
+        a.setUserId(req.userId);
+        modelAssignmentDao.insert(a);
+        return Result.ok("分配成功");
+    }
+
+    @DeleteMapping("/admin/assign")
+    public Result unassignModel(@RequestBody AssignRequest req) {
+        requireAdmin();
+        modelAssignmentDao.deleteByModelAndUser(req.modelId, req.userId);
+        return Result.ok("已取消分配");
+    }
+
+    @GetMapping("/admin/users")
+    public Result<List<User>> listUsers() {
+        requireAdmin();
+        List<User> users = userService.listAll();
+        users.forEach(u -> u.setPassword(null));
+        return Result.ok(users);
+    }
+
+    public record AssignRequest(Long modelId, Long userId) {}
 }

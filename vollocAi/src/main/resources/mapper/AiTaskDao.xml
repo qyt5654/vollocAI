@@ -14,11 +14,6 @@
         <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
     </resultMap>
 
-    <select id="queryById" resultMap="AiTaskMap">
-        select id, task_id, user_id, query, intent, result, status, create_time, update_time
-        from ai_task where id = #{id}
-    </select>
-
     <select id="queryByTaskId" resultMap="AiTaskMap">
         select id, task_id, user_id, query, intent, result, status, create_time, update_time
         from ai_task where task_id = #{taskId}

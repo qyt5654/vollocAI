@@ -81,13 +81,18 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
-    public Long doLogin(User user) {
+    public User doLogin(User user) {
         List<User> users = this.userDao.queryAllByLimit(user);
-        return users.get(0).getId();
+        return users.isEmpty() ? null : users.get(0);
     }
 
     @Override
     public void doRegister(User user) {
         this.userDao.insert(user);
+    }
+
+    @Override
+    public List<User> listAll() {
+        return this.userDao.queryAllByLimit(new User());
     }
 }

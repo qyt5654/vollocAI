@@ -43,9 +43,7 @@ public class TaskCompensationScheduler {
             msg.setUserId(task.getUserId());
             msg.setMessage(task.getQuery());
 
-            String topic = "image".equals(task.getIntent())
-                    ? "ai-task-topic-img" : "ai-task-topic-message";
-            rocketMQTemplate.convertAndSend(topic, JSON.toJSONString(msg));
+            rocketMQTemplate.convertAndSend("ai-task-topic", JSON.toJSONString(msg));
         }
     }
 
@@ -61,9 +59,7 @@ public class TaskCompensationScheduler {
             msg.setUserId(task.getUserId());
             msg.setMessage(task.getQuery());
 
-            String topic = "image".equals(task.getIntent())
-                    ? "ai-task-topic-img" : "ai-task-topic-message";
-            rocketMQTemplate.convertAndSend(topic, JSON.toJSONString(msg));
+            rocketMQTemplate.convertAndSend("ai-task-topic", JSON.toJSONString(msg));
         }
     }
 }

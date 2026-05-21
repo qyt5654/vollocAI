@@ -1,6 +1,9 @@
 package com.vollocAI.ai.service;
 
 import com.vollocAI.ai.entity.User;
+
+import java.util.List;
+
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 
@@ -58,11 +61,13 @@ public interface UserService {
      * @param user
      * @return
      */
-    Long doLogin(User user);
+    User doLogin(User user);
 
     /**
      * 注册
      * @param user
      */
     void doRegister(User user);
+
+    List<User> listAll();
 }
