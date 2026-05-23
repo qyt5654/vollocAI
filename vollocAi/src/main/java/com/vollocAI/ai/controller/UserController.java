@@ -62,14 +62,5 @@ public class UserController {
         return Result.ok("注册成功");
     }
 
-    /**
-     * 测试
-     */
-    @PostMapping("test")
-    public String doo(){
-        SaTokenInfo tokenInfo = StpUtil.getTokenInfo();
-        return (String) tokenInfo.getLoginId();
-    }
-
 }
 

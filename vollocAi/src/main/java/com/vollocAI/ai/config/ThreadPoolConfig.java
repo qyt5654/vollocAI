@@ -13,19 +13,11 @@ import java.util.concurrent.TimeUnit;
 @Configuration
 public class ThreadPoolConfig {
 
-    @Bean(name = "aiThreadPool")
+    @Bean(name = "aiThreadPool", destroyMethod = "shutdown")
     public ThreadPoolExecutor getLabelThreadPool(){
         return new ThreadPoolExecutor(20, 100, 5,
                 TimeUnit.SECONDS, new LinkedBlockingDeque<>(40),
-                new CustomNameThreadFactory("ai"),//设置名称，可根据报错定位
-                new ThreadPoolExecutor.CallerRunsPolicy());
-    }
-
-    @Bean(name = "qpstest")
-    public ThreadPoolExecutor getQpstest(){
-        return new ThreadPoolExecutor(20, 100, 5,
-                TimeUnit.SECONDS, new LinkedBlockingDeque<>(200),
-                new CustomNameThreadFactory("qps"),//设置名称，可根据报错定位
+                new CustomNameThreadFactory("ai"),
                 new ThreadPoolExecutor.CallerRunsPolicy());
     }
 

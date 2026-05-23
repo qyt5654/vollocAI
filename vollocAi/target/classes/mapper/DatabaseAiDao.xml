@@ -18,30 +18,6 @@
         where id = #{id}
     </select>
 
-    <!--查询指定行数据-->
-    <select id="queryAllByLimit" resultMap="DatabaseAiMap">
-        select
-            id,ai_api_key,ai_api_url,ai_api_model,user_id
-        from database_ai
-        <where>
-            <if test="id != null">
-                and id = #{id}
-            </if>
-            <if test="aiApiKey != null and aiApiKey != ''">
-                and ai_api_key = #{aiApiKey}
-            </if>
-            <if test="aiApiUrl != null and aiApiUrl != ''">
-                and ai_api_url = #{aiApiUrl}
-            </if>
-            <if test="aiApiModel != null and aiApiModel != ''">
-                and ai_api_model = #{aiApiModel}
-            </if>
-            <if test="userId != null">
-                and user_id = #{userId}
-            </if>
-        </where>
-    </select>
-
     <select id="selectByDatabaseAi" resultType="com.vollocAI.ai.entity.DatabaseAi">
         select * from database_ai
         <where>

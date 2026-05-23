@@ -18,4 +18,6 @@ public class QuestionDTO {
      */
     private Long id;
 
+    private String sessionId;
+
 }

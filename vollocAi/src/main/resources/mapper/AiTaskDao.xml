@@ -40,11 +40,4 @@
         where task_id = #{taskId}
     </update>
 
-    <select id="queryTimeoutPending" resultMap="AiTaskMap">
-        select id, task_id, user_id, query, intent, result, status, create_time, update_time
-        from ai_task
-        where status = #{status} and create_time &lt; #{deadline}
-        limit 100
-    </select>
-
 </mapper>

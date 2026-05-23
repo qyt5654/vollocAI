@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>vollocAI</title>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
         :root {
             --sidebar-w: 224px;
@@ -74,12 +78,6 @@
         .turn .body audio { margin-top: 8px; }
         .turn .body .stamp { font-size: 11px; color: var(--c-muted); margin-top: 8px; }
 
-        /* Loading */
-        .pending { padding: 0 0 28px; color: var(--c-muted); font-size: 13px; display: flex; align-items: center; gap: 10px; }
-        .pending .bar { width: 100px; height: 3px; background: var(--c-border); border-radius: 2px; overflow: hidden; }
-        .pending .bar i { display: block; height: 100%; width: 50%; background: var(--c-accent); animation: slide 1s infinite ease-in-out; border-radius: 2px; }
-        @keyframes slide { 0% { margin-left: -50%; } 100% { margin-left: 100%; } }
-
         /* Input */
         .input-bar { padding: 16px 48px 24px; display: flex; gap: 12px; align-items: flex-end; }
         .input-bar textarea { flex: 1; padding: 14px 18px; border: 1.5px solid var(--c-border); border-radius: 12px; font-size: 14px; font-family: inherit; outline: none; resize: none; height: 50px; line-height: 1.5; transition: border-color .15s; background: var(--c-surface); box-shadow: var(--shadow); }
@@ -112,6 +110,23 @@
 
         .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 24px; border-radius: 8px; font-size: 13px; z-index: 999; box-shadow: 0 4px 16px rgba(0,0,0,.15); }
 
+        .md { line-height: 1.75; }
+        .md p { margin: 0 0 8px; }
+        .md p:last-child { margin-bottom: 0; }
+        .md code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace; }
+        .md pre { background: #1e1e1e; color: #e0e0e0; padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-size: 13px; line-height: 1.5; }
+        .md pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
+        .md ul, .md ol { margin: 6px 0; padding-left: 20px; }
+        .md li { margin: 2px 0; }
+        .md h1, .md h2, .md h3 { margin: 12px 0 6px; font-weight: 600; }
+        .md h1 { font-size: 18px; } .md h2 { font-size: 16px; } .md h3 { font-size: 15px; }
+        .md blockquote { border-left: 3px solid #d4d4d8; padding-left: 12px; color: var(--c-muted); margin: 8px 0; }
+        .md a { color: var(--c-accent); }
+        .md table { border-collapse: collapse; width: 100%; margin: 8px 0; }
+        .md th, .md td { border: 1px solid var(--c-border); padding: 6px 10px; text-align: left; font-size: 13px; }
+        .md th { background: #f8f8f8; font-weight: 600; }
+        .md hr { border: none; border-top: 1px solid var(--c-border); margin: 12px 0; }
+
         /* Tags */
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
         .tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; background: var(--c-accent-soft); border: 1px solid #e0e7ff; border-radius: 20px; font-size: 12px; font-weight: 500; white-space: nowrap; }
@@ -119,6 +134,14 @@
         .tag .tag-x:hover { background: #e0e7ff; color: var(--c-danger); }
         .tag-add { padding: 4px 12px; border: 1.5px dashed #d4d4d8; border-radius: 20px; font-size: 12px; background: transparent; cursor: pointer; color: var(--c-muted); outline: none; min-width: 72px; transition: border-color .15s; }
         .tag-add:focus { border-color: var(--c-accent); color: var(--c-accent); }
+
+        .sessions { flex: 1; overflow-y: auto; margin: 4px -8px 0; }
+        .sessions .item { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--c-sidebar-text); display: flex; justify-content: space-between; align-items: center; transition: all .1s; }
+        .sessions .item:hover { background: var(--c-sidebar-hover); color: #ddd; }
+        .sessions .item.active { background: rgba(165,180,252,.12); color: #c7d2fe; }
+        .sessions .item .txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sessions .item .del { opacity: 0; font-size: 11px; color: #f87171; margin-left: 6px; flex-shrink: 0; }
+        .sessions .item:hover .del { opacity: 1; }
     </style>
 </head>
 <body>
@@ -137,10 +160,16 @@
     <div v-else class="app-layout">
         <aside class="sidebar">
             <div class="brand">vollocAI</div>
-            <select v-model="selectedModelId">
-                <option :value="0">默认模型</option>
+            <select v-model="selectedModelId" :disabled="!models.length">
+                <option :value="0" disabled>{{ models.length ? '选择模型' : '无可用模型' }}</option>
                 <option v-for="m in models" :key="m.id" :value="m.id">{{ m.aiApiModel }}</option>
             </select>
+            <div class="sessions">
+                <div v-for="s in sessions" :key="s.sessionId" :class="['item', { active: s.sessionId === sessionId }]" @click="openSession(s)">
+                    <span class="txt">{{ s.title || '新会话' }}</span>
+                    <span class="del" @click.stop="delSession(s.sessionId)">×</span>
+                </div>
+            </div>
             <button @click="newSession">新建会话</button>
             <button v-if="role==='admin'" class="admin-btn" @click="openModels">模型管理</button>
             <button v-if="role==='admin'" class="admin-btn" @click="openAssign">分配管理</button>
@@ -156,17 +185,17 @@
                 <div v-for="(m,i) in messages" :key="i" :class="['turn', m.role]">
                     <div class="label">{{ m.role === 'user' ? 'You' : 'Assistant' }}</div>
                     <div class="body">
-                        <div>{{ m.text }}</div>
+                        <div v-if="m.role==='assistant'" class="md" v-html="renderMd(m.text)"></div>
+                        <div v-else>{{ m.text }}</div>
                         <img v-if="m.image" :src="m.image" alt="output">
                         <audio v-if="m.audio" controls :src="m.audio"></audio>
                         <div class="stamp">{{ m.time }}</div>
                     </div>
                 </div>
-                <div v-if="waiting" class="pending">处理中 <div class="bar"><i></i></div></div>
             </div>
             <div class="input-bar">
-                <textarea v-model="input" placeholder="输入内容，Enter 发送" @keydown.enter.exact.prevent="send" :disabled="waiting" rows="1"></textarea>
-                <button @click="send" :disabled="waiting || !input.trim()">发送</button>
+                <textarea v-model="input" placeholder="输入内容，Enter 发送" @keydown.enter.exact.prevent="send" :disabled="!selectedModelId" rows="1"></textarea>
+                <button @click="send" :disabled="!input.trim() || !selectedModelId">发送</button>
             </div>
         </main>
     </div>
@@ -239,11 +268,11 @@ const { createApp, ref, reactive, nextTick, onMounted } = Vue;
 createApp({
     setup() {
         const BASE = '';
-        const DEV = true;
-
-        const user = ref(DEV ? { username: 'dev' } : null);
-        const token = ref(localStorage.getItem('satoken') || (DEV ? 'dev-token' : ''));
-        const role = ref(DEV ? 'admin' : (localStorage.getItem('role') || 'user'));
+        const user = ref(null);
+        const stored = localStorage.getItem('satoken');
+        const token = ref((stored && stored !== 'dev-token') ? stored : '');
+        const storedRole = localStorage.getItem('role');
+        const role = ref((storedRole && storedRole !== 'dev-role') ? storedRole : 'user');
         const isLogin = ref(true);
         const authErr = ref(''); const authLoading = ref(false);
         const authForm = reactive({ username: '', password: '' });
@@ -253,7 +282,10 @@ createApp({
             authLoading.value = true; authErr.value = '';
             try {
                 const url = isLogin.value ? '/user/doLogin' : '/user/doRegister';
-                const res = await fetch(BASE + url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams(authForm) });
+                const res = await fetch(BASE + url, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username: authForm.username, password: authForm.password })
+                });
                 const data = await res.json();
                 if (data.success) {
                     const r = data.data;
@@ -262,6 +294,7 @@ createApp({
                     localStorage.setItem('role', role.value);
                     user.value = { username: authForm.username };
                     loadModels();
+                    loadSessions();
                 } else { authErr.value = data.message || '操作失败'; }
             } catch (e) { authErr.value = '网络异常'; }
             finally { authLoading.value = false; }
@@ -269,40 +302,105 @@ createApp({
         const logout = () => { localStorage.removeItem('satoken'); localStorage.removeItem('role'); token.value = ''; user.value = null; messages.value = []; models.value = []; role.value = 'user'; };
 
         // Chat
-        const input = ref(''); const waiting = ref(false); const messages = ref([]); const chatArea = ref(null);
+        const input = ref(''); const messages = ref([]); const chatArea = ref(null);
+        const sessionId = ref(crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36));
         const selectedModelId = ref(0); const models = ref([]); const toast = ref('');
 
         const loadModels = async () => {
             try {
                 const res = await fetch(BASE + '/ai/selectModelByUserId', { headers: { satoken: token.value } });
                 const data = await res.json();
-                if (data.success) models.value = data.data || [];
+                if (data.success) { models.value = data.data || []; if (models.value.length) selectedModelId.value = models.value[0].id; }
             } catch (e) {}
         };
 
-        const pollResult = async (taskId) => {
-            for (let i = 0; i < 60; i++) {
-                await new Promise(r => setTimeout(r, 2000));
-                try {
-                    const res = await fetch(BASE + '/ai/result/' + taskId, { headers: { satoken: token.value } });
-                    const data = await res.json();
-                    if (!data.success) { waiting.value = false; pushMsg('assistant', data.message || '执行失败'); return; }
-                    if (data.data != null) {
-                        waiting.value = false;
-                        const c = data.data;
-                        if (c.startsWith('http') && (c.includes('.mp3') || c.includes('.wav'))) pushMsg('assistant', '语音生成完成', null, c);
-                        else if (c.startsWith('http')) pushMsg('assistant', '图片生成完成', c, null);
-                        else pushMsg('assistant', c);
-                        return;
-                    }
-                } catch (e) {}
-            }
-            waiting.value = false; pushMsg('assistant', '请求超时，请重试');
+        /** SSE 流式订阅：每个 token 推一个，前端逐字渲染 */
+        const sseSubscribe = (taskId, placeholderIdx) => {
+            const es = new EventSource(BASE + '/ai/stream/' + taskId + '?satoken=' + token.value);
+            let fullText = '', closed = false;
+            es.onmessage = (e) => {
+                if (closed) return;
+                if (e.data === '[DONE]') { es.close(); closed = true; loadSessions(); return; }
+                if (e.data.startsWith('ERROR:')) { es.close(); closed = true; messages.value[placeholderIdx] = { ...messages.value[placeholderIdx], text: e.data }; return; }
+                fullText += e.data;
+                messages.value[placeholderIdx] = { role: 'assistant', text: fullText, image: null, audio: null, time: new Date().toLocaleTimeString() };
+                nextTick(() => { if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight; });
+            };
+            es.onerror = () => { if (!closed) { es.close(); closed = true; } };
         };
 
         const pushMsg = (role, text, image, audio) => { messages.value.push({ role, text, image: image || null, audio: audio || null, time: new Date().toLocaleTimeString() }); nextTick(() => { if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight; }); };
-        const send = async () => { const q = input.value.trim(); if (!q || waiting.value) return; pushMsg('user', q); input.value = ''; waiting.value = true; try { const res = await fetch(BASE + '/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', satoken: token.value }, body: JSON.stringify({ question: q, id: selectedModelId.value }) }); const data = await res.json(); if (!data.success) { waiting.value = false; pushMsg('assistant', data.message || '请求失败'); return; } pollResult(data.data); } catch (e) { waiting.value = false; pushMsg('assistant', '网络异常'); } };
-        const newSession = () => { messages.value = []; };
+        const send = async () => { const q = input.value.trim(); if (!q) return; pushMsg('user', q); input.value = ''; const placeholder = messages.value.length; pushMsg('assistant', '...'); try { const res = await fetch(BASE + '/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', satoken: token.value }, body: JSON.stringify({ question: q, id: selectedModelId.value, sessionId: sessionId.value }) }); const data = await res.json(); if (!data.success) { messages.value.splice(placeholder, 1); pushMsg('assistant', data.message || '请求失败'); return; } sseSubscribe(data.data, placeholder); } catch (e) { messages.value.splice(placeholder, 1); pushMsg('assistant', '网络异常'); } };
+        const sessions = ref([]);
+
+        const loadSessions = async () => {
+            try {
+                const res = await fetch(BASE + '/ai/sessions', { headers: { satoken: token.value } });
+                const data = await res.json();
+                if (data.success) sessions.value = data.data || [];
+            } catch (e) {}
+        };
+
+        const openSession = async (s) => {
+            sessionId.value = s.sessionId;
+            messages.value = [];
+            try {
+                const res = await fetch(BASE + '/ai/sessions/' + s.sessionId, { headers: { satoken: token.value } });
+                const data = await res.json();
+                if (data.success && data.data.messages) {
+                    const msgs = JSON.parse(data.data.messages);
+                    messages.value = msgs.map(m => ({ role: m.role, text: m.content, image: null, audio: null, time: '' }));
+                }
+            } catch (e) {}
+        };
+
+        const delSession = async (sid) => {
+            await fetch(BASE + '/ai/sessions/' + sid, { method: 'DELETE', headers: { satoken: token.value } });
+            loadSessions();
+            if (sid === sessionId.value) newSession();
+        };
+
+        const newSession = () => { messages.value = []; sessionId.value = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36); loadSessions(); };
+
+        const renderMd = (text) => {
+            if (!text) return '';
+            try {
+                // 1. 保护数学块，替换为占位符，避免 marked 破坏 LaTeX
+                const mathBlocks = [];
+                let protected_ = text
+                    // $$...$$ 和 \[...\] → display math
+                    .replace(/\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]/g, (m, d1, d2) => {
+                        mathBlocks.push({ display: true, tex: (d1 || d2).trim() });
+                        return `\n[MATH${mathBlocks.length-1}]\n`;
+                    })
+                    // 独立行的 [ ... ] 含 LaTeX → display math
+                    .replace(/^\s*\[\s*((?:\\.|[^\]])+)\s*\]\s*$/gm, (_, m) => {
+                        if (!m.includes('\\')) return _;
+                        mathBlocks.push({ display: true, tex: m.trim() });
+                        return `\n[MATH${mathBlocks.length-1}]\n`;
+                    })
+                    // \(...\) → inline math
+                    .replace(/\\\(([\s\S]*?)\\\)/g, (_, m) => {
+                        mathBlocks.push({ display: false, tex: m.trim() });
+                        return `[MATH${mathBlocks.length-1}]`;
+                    })
+                    // 正文中的 LaTeX 命令序列 → 包成行内公式
+                    .replace(/((?:\\[a-zA-Z]+(?:\{[^}]*\})?\s*)+)/g, (m) => {
+                        if (m.length < 4) return m;
+                        mathBlocks.push({ display: false, tex: m.trim() });
+                        return `[MATH${mathBlocks.length-1}]`;
+                    });
+                // 2. Markdown → HTML
+                let html = marked.parse(protected_);
+                // 3. 数学占位符 → KaTeX
+                html = html.replace(/\[MATH(\d+)\]/g, (_, i) => {
+                    const b = mathBlocks[parseInt(i)];
+                    try { return katex.renderToString(b.tex, { displayMode: b.display, throwOnError: false }); }
+                    catch (e) { return b.tex; }
+                });
+                return html;
+            } catch (e) { return text; }
+        };
 
         // Admin - 通用
         const showModels = ref(false); const showAssign = ref(false);
@@ -312,19 +410,6 @@ createApp({
         const editingId = ref(null);
 
         const loadAdminData = async () => {
-            if (DEV) {
-                allModels.value = [
-                    { id: 1, aiApiModel: 'qwen3-max', aiApiUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', assignedUserIds: [1, 2] },
-                    { id: 2, aiApiModel: 'wanx-v1', aiApiUrl: 'https://dashscope.aliyuncs.com/api/v1', assignedUserIds: [1] },
-                    { id: 3, aiApiModel: 'gpt-4o', aiApiUrl: 'https://api.openai.com/v1', assignedUserIds: [] },
-                    { id: 4, aiApiModel: 'claude-3.5-sonnet', aiApiUrl: 'https://api.anthropic.com/v1', assignedUserIds: [2, 3] },
-                ];
-                allUsers.value = [
-                    { id: 1, username: 'admin' }, { id: 2, username: 'zhangsan' }, { id: 3, username: 'lisi' },
-                ];
-                allModels.value.forEach(m => assignedSet[m.id] = new Set(m.assignedUserIds || []));
-                return;
-            }
             try {
                 const [mr, ur] = await Promise.all([
                     fetch(BASE + '/ai/admin/models', { headers: { satoken: token.value } }),
@@ -401,34 +486,16 @@ createApp({
         };
 
         onMounted(() => {
-            if (DEV) {
-                models.value = [
-                    { id: 1, aiApiModel: 'qwen3-max' },
-                    { id: 2, aiApiModel: 'wanx-v1' },
-                    { id: 3, aiApiModel: 'gpt-4o' },
-                ];
-                messages.value = [
-                    { role: 'user', text: '你好，请用中文翻译这段话：Hello, this is a test message for the AI system.', image: null, audio: null, time: '09:12' },
-                    { role: 'assistant', text: '你好，这是给 AI 系统的一条测试消息。', image: null, audio: null, time: '09:12' },
-                    { role: 'user', text: '帮我画一张赛博朋克风格的城市夜景', image: null, audio: null, time: '09:14' },
-                    { role: 'assistant', text: '已生成', image: 'https://placehold.co/600x400/0a0a2e/00f0ff?text=Cyberpunk+City', audio: null, time: '09:15' },
-                    { role: 'user', text: '把下面这段文字转成语音：欢迎使用 vollocAI 智能平台', image: null, audio: null, time: '09:18' },
-                    { role: 'assistant', text: '语音已生成', image: null, audio: 'https://www.w3schools.com/html/horse.mp3', time: '09:18' },
-                    { role: 'user', text: '帮我写一个 Python 冒泡排序', image: null, audio: null, time: '09:20' },
-                    { role: 'assistant', text: '当然，这是冒泡排序的 Python 实现：\ndef bubble_sort(arr):\n    n = len(arr)\n    for i in range(n):\n        for j in range(0, n-i-1):\n            if arr[j] > arr[j+1]:\n                arr[j], arr[j+1] = arr[j+1], arr[j]\n    return arr\n\n# 示例\nprint(bubble_sort([64, 34, 25, 12, 22, 11, 90]))', image: null, audio: null, time: '09:20' },
-                ];
-                return;
-            }
             if (token.value) {
                 role.value = localStorage.getItem('role') || 'user';
                 fetch(BASE + '/ai/selectModelByUserId', { headers: { satoken: token.value } }).then(r => r.json()).then(d => {
-                    if (d.success) { user.value = { username: '已登录' }; models.value = d.data || []; }
+                    if (d.success) { user.value = { username: '已登录' }; models.value = d.data || []; if (models.value.length) selectedModelId.value = models.value[0].id; loadSessions(); }
                     else { localStorage.removeItem('satoken'); localStorage.removeItem('role'); token.value = ''; role.value = 'user'; }
                 }).catch(() => {});
             }
         });
 
-        return { user, token, role, isLogin, authErr, authLoading, authForm, doAuth, logout, input, waiting, messages, chatArea, selectedModelId, models, send, newSession, toast, showModels, showAssign, allModels, allUsers, assignedSet, form, editingId, openModels, openAssign, editModel, addModel, updateModel, delModel, toggleAssign, modelsOfUser, modelsNotOfUser };
+        return { user, token, role, isLogin, authErr, authLoading, authForm, doAuth, logout, input, messages, chatArea, sessionId, selectedModelId, models, sessions, send, newSession, openSession, delSession, toast, showModels, showAssign, allModels, allUsers, assignedSet, form, editingId, openModels, openAssign, editModel, addModel, updateModel, delModel, toggleAssign, modelsOfUser, modelsNotOfUser, renderMd };
     }
 }).mount('#app');
 </script>

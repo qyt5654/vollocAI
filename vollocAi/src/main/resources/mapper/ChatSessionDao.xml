@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vollocAI.ai.dao.ChatSessionDao">
+
+    <resultMap id="ChatSessionMap" type="com.vollocAI.ai.entity.ChatSession">
+        <result property="id" column="id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="title" column="title"/>
+        <result property="messages" column="messages"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <select id="findBySessionId" resultMap="ChatSessionMap">
+        select * from chat_session where session_id = #{sessionId}
+    </select>
+
+    <select id="findByUserId" resultMap="ChatSessionMap">
+        select * from chat_session where user_id = #{userId} order by update_time desc
+    </select>
+
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        insert into chat_session(session_id, user_id, title, messages, create_time, update_time)
+        values (#{sessionId}, #{userId}, #{title}, #{messages}, now(), now())
+    </insert>
+
+    <update id="update">
+        update chat_session set title = #{title}, messages = #{messages}, update_time = now()
+        where session_id = #{sessionId}
+    </update>
+
+    <delete id="deleteBySessionId">
+        delete from chat_session where session_id = #{sessionId}
+    </delete>
+
+</mapper>
