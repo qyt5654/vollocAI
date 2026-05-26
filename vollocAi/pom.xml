@@ -102,7 +102,7 @@
         <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
-            <version>19.0</version>
+            <version>32.1.3-jre</version>
         </dependency>
         <dependency>
             <groupId>org.apache.commons</groupId>
@@ -121,8 +121,7 @@
             <artifactId>langchain4j-open-ai</artifactId>
             <version>${langchain4j.version}</version>
         </dependency>
-        <!-- Milvus 向量数据库 SDK（RAG 知识库）—— Jackson 版本冲突，暂时注释 -->
-        <!--dependency>
+        <dependency>
             <groupId>io.milvus</groupId>
             <artifactId>milvus-sdk-java</artifactId>
             <version>2.4.1</version>
@@ -131,8 +130,12 @@
                     <groupId>com.fasterxml.jackson.core</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>com.fasterxml.jackson.dataformat</groupId>
+                    <artifactId>*</artifactId>
+                </exclusion>
             </exclusions>
-        </dependency-->
+        </dependency>
         <!--日志-->
         <dependency>
             <groupId>org.tinylog</groupId>

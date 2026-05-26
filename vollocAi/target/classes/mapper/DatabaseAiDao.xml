@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.vollocAI.ai.dao.DatabaseAiDao">
+<mapper namespace="com.vollocAI.ai.model.dao.DatabaseAiDao">
 
-    <resultMap type="com.vollocAI.ai.entity.DatabaseAi" id="DatabaseAiMap">
+    <resultMap type="com.vollocAI.ai.model.DatabaseAi" id="DatabaseAiMap">
         <result property="id" column="id" jdbcType="INTEGER"/>
         <result property="aiApiKey" column="ai_api_key" jdbcType="VARCHAR"/>
         <result property="aiApiUrl" column="ai_api_url" jdbcType="VARCHAR"/>
@@ -18,7 +18,7 @@
         where id = #{id}
     </select>
 
-    <select id="selectByDatabaseAi" resultType="com.vollocAI.ai.entity.DatabaseAi">
+    <select id="selectByDatabaseAi" resultType="com.vollocAI.ai.model.DatabaseAi">
         select * from database_ai
         <where>
             <if test="id != null">

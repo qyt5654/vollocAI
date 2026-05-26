@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>vollocAI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
@@ -11,199 +14,564 @@
     <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
     <style>
         :root {
-            --sidebar-w: 224px;
-            --c-bg: #f8f8f8;
-            --c-surface: #fff;
-            --c-sidebar: #1a1a2e;
-            --c-sidebar-text: #a0a0b8;
-            --c-sidebar-hover: #252540;
-            --c-border: #eee;
-            --c-text: #1a1a1a;
-            --c-muted: #999;
-            --c-accent: #4f46e5;
+            --sidebar-w: 260px;
+            --chat-max: 780px;
+            --c-bg: #f4f5f7;
+            --c-surface: #ffffff;
+            --c-sidebar: #12141a;
+            --c-sidebar-elevated: #1c1f27;
+            --c-sidebar-text: #9ca3af;
+            --c-sidebar-hover: #252a35;
+            --c-border: #e5e7eb;
+            --c-text: #111827;
+            --c-muted: #6b7280;
+            --c-accent: #6366f1;
+            --c-accent-hover: #4f46e5;
             --c-accent-soft: #eef2ff;
+            --c-user-bg: #6366f1;
+            --c-user-text: #fff;
             --c-danger: #ef4444;
             --c-danger-soft: #fef2f2;
-            --radius: 8px;
-            --shadow: 0 1px 2px rgba(0,0,0,.04);
+            --c-success: #10b981;
+            --radius: 10px;
+            --radius-lg: 16px;
+            --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
+            --shadow-md: 0 4px 24px rgba(0,0,0,.08);
+            --font: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --mono: 'JetBrains Mono', 'SF Mono', monospace;
         }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
-            background: var(--c-bg); color: var(--c-text); font-size: 14px;
-            -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+            font-family: var(--font);
+            background: var(--c-bg);
+            color: var(--c-text);
+            font-size: 15px;
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+        }
+        button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+            outline: 2px solid var(--c-accent);
+            outline-offset: 2px;
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
         }
 
         /* Auth */
-        .auth-wrap { display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #f0f0f8 0%, #f8f8f8 100%); }
-        .auth-box { width: 380px; padding: 40px; background: var(--c-surface); border-radius: 12px; box-shadow: 0 4px 32px rgba(0,0,0,.06); }
-        .auth-box h2 { font-size: 20px; font-weight: 700; margin-bottom: 28px; text-align: center; letter-spacing: -.02em; }
-        .auth-box input { width: 100%; padding: 12px 14px; margin-bottom: 12px; border: 1.5px solid var(--c-border); border-radius: var(--radius); font-size: 14px; outline: none; transition: border-color .15s; }
-        .auth-box input:focus { border-color: var(--c-accent); }
-        .auth-box button { width: 100%; padding: 12px; background: var(--c-accent); color: #fff; border: none; border-radius: var(--radius); font-size: 14px; font-weight: 600; cursor: pointer; margin-top: 6px; transition: opacity .15s; }
-        .auth-box button:hover { opacity: .9; }
-        .auth-box button:disabled { opacity: .4; cursor: not-allowed; }
-        .auth-switch { text-align: center; margin-top: 18px; font-size: 13px; color: var(--c-muted); cursor: pointer; }
+        .auth-wrap {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background:
+                radial-gradient(ellipse 80% 60% at 50% -10%, rgba(99,102,241,.18), transparent),
+                var(--c-bg);
+        }
+        .auth-box {
+            width: 100%;
+            max-width: 400px;
+            padding: 40px 36px;
+            background: var(--c-surface);
+            border-radius: var(--radius-lg);
+            border: 1px solid var(--c-border);
+            box-shadow: var(--shadow-md);
+        }
+        .auth-logo {
+            width: 48px; height: 48px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--c-accent), #8b5cf6);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: 700; font-size: 18px;
+            margin: 0 auto 20px;
+        }
+        .auth-box h2 { font-size: 22px; font-weight: 700; text-align: center; margin-bottom: 8px; letter-spacing: -.02em; }
+        .auth-sub { text-align: center; color: var(--c-muted); font-size: 14px; margin-bottom: 28px; }
+        .auth-box input {
+            width: 100%; padding: 12px 14px; margin-bottom: 12px;
+            border: 1px solid var(--c-border); border-radius: var(--radius);
+            font-size: 15px; font-family: inherit; transition: border-color .15s, box-shadow .15s;
+        }
+        .auth-box input:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px rgba(99,102,241,.15); }
+        .auth-box .btn-primary {
+            width: 100%; padding: 12px; margin-top: 8px;
+            background: var(--c-accent); color: #fff; border: none; border-radius: var(--radius);
+            font-size: 15px; font-weight: 600; font-family: inherit; cursor: pointer;
+            transition: background .15s, transform .1s;
+        }
+        .auth-box .btn-primary:hover:not(:disabled) { background: var(--c-accent-hover); }
+        .auth-box .btn-primary:disabled { opacity: .45; cursor: not-allowed; }
+        .auth-switch { text-align: center; margin-top: 20px; font-size: 14px; color: var(--c-muted); cursor: pointer; }
         .auth-switch:hover { color: var(--c-accent); }
-        .auth-err { color: var(--c-danger); font-size: 13px; margin-bottom: 6px; text-align: center; }
+        .auth-err {
+            background: var(--c-danger-soft); color: var(--c-danger);
+            padding: 10px 12px; border-radius: var(--radius); font-size: 13px;
+            margin-bottom: 12px; text-align: center;
+        }
 
         /* Layout */
-        .app-layout { display: flex; height: 100vh; }
-        .sidebar { width: var(--sidebar-w); background: var(--c-sidebar); display: flex; flex-direction: column; padding: 24px 16px; gap: 6px; flex-shrink: 0; }
-        .sidebar .brand { font-size: 16px; font-weight: 700; color: #fff; padding: 0 8px; margin-bottom: 16px; letter-spacing: -.01em; }
-        .sidebar select { width: 100%; padding: 8px 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 6px; font-size: 13px; background: rgba(255,255,255,.06); color: #ccc; cursor: pointer; outline: none; }
+        .app-layout { display: flex; height: 100vh; overflow: hidden; }
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--c-sidebar);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 14px;
+            gap: 4px;
+            flex-shrink: 0;
+            border-right: 1px solid rgba(255,255,255,.06);
+        }
+        .sidebar .brand {
+            display: flex; align-items: center; gap: 10px;
+            padding: 8px 10px 16px;
+            font-size: 17px; font-weight: 700; color: #fff; letter-spacing: -.02em;
+        }
+        .sidebar .brand-mark {
+            width: 32px; height: 32px; border-radius: 8px;
+            background: linear-gradient(135deg, var(--c-accent), #8b5cf6);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; font-weight: 700;
+        }
+        .sidebar-label {
+            font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: .06em; color: #6b7280; padding: 12px 10px 6px;
+        }
+        .sidebar select {
+            width: 100%; padding: 10px 12px;
+            border: 1px solid rgba(255,255,255,.1); border-radius: var(--radius);
+            font-size: 13px; font-family: inherit;
+            background: var(--c-sidebar-elevated); color: #e5e7eb; cursor: pointer;
+        }
         .sidebar select option { background: var(--c-sidebar); color: #fff; }
-        .sidebar button { width: 100%; padding: 9px 12px; border: none; border-radius: 6px; font-size: 13px; background: transparent; cursor: pointer; color: var(--c-sidebar-text); text-align: left; transition: all .12s; }
-        .sidebar button:hover { background: var(--c-sidebar-hover); color: #ddd; }
-        .sidebar button.admin-btn { color: #a5b4fc; }
-        .sidebar button.admin-btn:hover { background: rgba(165,180,252,.1); }
-        .sidebar .meta { font-size: 12px; color: var(--c-sidebar-text); margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding: 8px; }
-        .sidebar .meta .link { cursor: pointer; color: #818cf8; }
+        .btn-new-chat {
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; padding: 10px 12px; margin: 8px 0 4px;
+            background: var(--c-accent); color: #fff; border: none; border-radius: var(--radius);
+            font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+            transition: background .15s;
+        }
+        .btn-new-chat:hover { background: var(--c-accent-hover); }
+        .sidebar .nav-btn {
+            width: 100%; padding: 9px 12px; border: none; border-radius: var(--radius);
+            font-size: 13px; font-family: inherit; background: transparent;
+            color: var(--c-sidebar-text); text-align: left; cursor: pointer;
+            transition: background .12s, color .12s;
+        }
+        .sidebar .nav-btn:hover { background: var(--c-sidebar-hover); color: #e5e7eb; }
+        .sidebar .nav-btn.admin { color: #a5b4fc; }
+        .sidebar .meta {
+            font-size: 12px; color: var(--c-sidebar-text);
+            margin-top: auto; padding: 12px 10px;
+            display: flex; justify-content: space-between; align-items: center;
+            border-top: 1px solid rgba(255,255,255,.08);
+        }
+        .sidebar .meta .link { cursor: pointer; color: #818cf8; font-weight: 500; }
         .sidebar .meta .link:hover { color: #a5b4fc; }
+        .badge-admin {
+            font-size: 10px; padding: 2px 6px; border-radius: 4px;
+            background: rgba(165,180,252,.2); color: #a5b4fc; margin-left: 4px;
+        }
+
+        .sessions { flex: 1; overflow-y: auto; margin: 0 -4px; padding: 0 4px; }
+        .sessions::-webkit-scrollbar { width: 4px; }
+        .sessions::-webkit-scrollbar-thumb { background: rgba(255,255,255,.15); border-radius: 4px; }
+        .sessions .item {
+            padding: 10px 12px; border-radius: var(--radius); cursor: pointer;
+            font-size: 13px; color: var(--c-sidebar-text);
+            display: flex; align-items: center; gap: 8px;
+            transition: background .12s, color .12s; margin-bottom: 2px;
+        }
+        .sessions .item:hover { background: var(--c-sidebar-hover); color: #e5e7eb; }
+        .sessions .item.active {
+            background: rgba(99,102,241,.2); color: #e0e7ff;
+            border: 1px solid rgba(99,102,241,.25);
+        }
+        .sessions .item .ico { opacity: .5; flex-shrink: 0; font-size: 12px; }
+        .sessions .item .txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .sessions .item .del {
+            opacity: 0; width: 22px; height: 22px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 14px; color: #f87171; flex-shrink: 0;
+            transition: opacity .12s, background .12s;
+        }
+        .sessions .item:hover .del { opacity: 1; }
+        .sessions .item .del:hover { background: rgba(248,113,113,.15); }
 
         .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--c-bg); }
+        .chat-header {
+            flex-shrink: 0; padding: 14px 24px;
+            background: rgba(255,255,255,.85); backdrop-filter: blur(12px);
+            border-bottom: 1px solid var(--c-border);
+            display: flex; align-items: center; justify-content: space-between;
+        }
+        .chat-header h1 { font-size: 15px; font-weight: 600; }
+        .chat-header .model-tag {
+            font-size: 12px; color: var(--c-muted);
+            background: var(--c-surface); border: 1px solid var(--c-border);
+            padding: 4px 10px; border-radius: 20px;
+        }
 
-        /* Thread */
-        .thread { flex: 1; overflow-y: auto; padding: 40px 48px; scroll-behavior: smooth; }
-        .thread .empty { text-align: center; color: var(--c-muted); margin-top: 160px; font-size: 15px; }
-        .turn { margin-bottom: 32px; animation: msgIn .2s ease; }
-        @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } }
-        .turn .label { font-size: 12px; font-weight: 600; color: var(--c-muted); margin-bottom: 6px; letter-spacing: .02em; }
-        .turn.user .label { text-align: right; }
-        .turn .body { padding: 14px 18px; border-radius: 12px; line-height: 1.7; font-size: 14px; max-width: 680px; white-space: pre-wrap; }
-        .turn.user .body { background: var(--c-accent-soft); border: 1px solid #e0e7ff; margin-left: auto; }
-        .turn.assistant .body { background: transparent; padding: 14px 0; }
-        .turn .body img { max-width: 360px; border-radius: 8px; margin-top: 10px; display: block; }
-        .turn.user .body img { margin-left: auto; }
-        .turn .body audio { margin-top: 8px; }
-        .turn .body .stamp { font-size: 11px; color: var(--c-muted); margin-top: 8px; }
+        .thread {
+            flex: 1; overflow-y: auto; scroll-behavior: smooth;
+            padding: 24px 20px 16px;
+        }
+        .thread-inner { max-width: var(--chat-max); margin: 0 auto; }
+
+        .empty-state {
+            text-align: center; padding: 80px 24px 40px;
+        }
+        .empty-state .icon {
+            width: 64px; height: 64px; margin: 0 auto 20px;
+            border-radius: 16px; background: var(--c-accent-soft);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px;
+        }
+        .empty-state h2 { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+        .empty-state p { color: var(--c-muted); font-size: 14px; margin-bottom: 24px; }
+        .suggestions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+        .suggestions button {
+            padding: 8px 14px; font-size: 13px; font-family: inherit;
+            background: var(--c-surface); border: 1px solid var(--c-border);
+            border-radius: 20px; color: var(--c-text); cursor: pointer;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .suggestions button:hover { border-color: var(--c-accent); box-shadow: var(--shadow-sm); }
+
+        .turn { margin-bottom: 28px; animation: msgIn .25s ease; }
+        @keyframes msgIn { from { opacity: 0; transform: translateY(8px); } }
+        .turn-row { display: flex; gap: 12px; max-width: 100%; }
+        .turn.user .turn-row { flex-direction: row-reverse; }
+        .avatar {
+            width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 13px; font-weight: 700;
+        }
+        .turn.user .avatar { background: var(--c-user-bg); color: var(--c-user-text); }
+        .turn.assistant .avatar { background: var(--c-surface); border: 1px solid var(--c-border); color: var(--c-accent); }
+        .bubble { flex: 1; min-width: 0; max-width: calc(100% - 48px); }
+        .turn.user .bubble { display: flex; flex-direction: column; align-items: flex-end; }
+        .bubble-content {
+            padding: 12px 16px; border-radius: var(--radius-lg); line-height: 1.65;
+            font-size: 15px; word-break: break-word;
+        }
+        .turn.user .bubble-content {
+            background: var(--c-user-bg); color: var(--c-user-text);
+            border-bottom-right-radius: 4px;
+        }
+        .turn.assistant .bubble-content {
+            background: var(--c-surface); border: 1px solid var(--c-border);
+            box-shadow: var(--shadow-sm); border-bottom-left-radius: 4px;
+        }
+        .turn.assistant .bubble-content.loading {
+            color: var(--c-muted); display: flex; align-items: center; gap: 8px;
+        }
+        .typing-dots { display: flex; gap: 4px; }
+        .typing-dots span {
+            width: 6px; height: 6px; border-radius: 50%; background: var(--c-muted);
+            animation: bounce 1.2s infinite ease-in-out;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: .15s; }
+        .typing-dots span:nth-child(3) { animation-delay: .3s; }
+        @keyframes bounce { 0%,80%,100% { transform: scale(.6); opacity: .4; } 40% { transform: scale(1); opacity: 1; } }
+
+        .stamp { font-size: 11px; color: var(--c-muted); margin-top: 6px; padding: 0 4px; }
+
+        /* ReAct timeline */
+        .react-wrap {
+            margin-top: 12px; width: 100%;
+            background: var(--c-surface); border: 1px solid var(--c-border);
+            border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow-sm);
+        }
+        .react-head {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 14px; font-size: 13px; font-weight: 600;
+            cursor: pointer; background: #fafafa; color: var(--c-text);
+            user-select: none; transition: background .12s;
+        }
+        .react-head:hover { background: #f3f4f6; }
+        .react-head .count {
+            font-size: 11px; font-weight: 600; color: var(--c-accent);
+            background: var(--c-accent-soft); padding: 2px 8px; border-radius: 10px;
+        }
+        .react-live {
+            padding: 8px 14px; font-size: 12px; color: var(--c-accent);
+            background: linear-gradient(90deg, var(--c-accent-soft), transparent);
+            border-bottom: 1px solid var(--c-border);
+            display: flex; align-items: center; gap: 8px;
+        }
+        .react-live::before {
+            content: ''; width: 6px; height: 6px; border-radius: 50%;
+            background: var(--c-accent); animation: pulse 1.2s infinite;
+        }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .35; } }
+        .react-body { padding: 10px 12px; max-height: 280px; overflow-y: auto; }
+        .react-item {
+            display: flex; gap: 10px; align-items: flex-start;
+            padding: 8px 6px; border-radius: 8px; font-size: 12px; line-height: 1.5;
+        }
+        .react-item + .react-item { border-top: 1px solid #f3f4f6; }
+        .react-badge {
+            flex-shrink: 0; font-family: var(--mono); font-size: 10px; font-weight: 600;
+            padding: 3px 6px; border-radius: 4px; letter-spacing: .03em;
+        }
+        .react-item.act .react-badge { background: #eef2ff; color: #4f46e5; }
+        .react-item.obs .react-badge { background: #ecfdf5; color: #059669; }
+        .react-item.state .react-badge { background: #f3f4f6; color: #6b7280; }
+        .react-item.err .react-badge { background: var(--c-danger-soft); color: var(--c-danger); }
+        .react-text { color: var(--c-text); word-break: break-word; font-family: var(--mono); font-size: 11px; }
+
+        .bubble-content img { max-width: 100%; border-radius: var(--radius); margin-top: 10px; }
+        .bubble-content audio { margin-top: 8px; width: 100%; max-width: 360px; }
 
         /* Input */
-        .input-bar { padding: 16px 48px 24px; display: flex; gap: 12px; align-items: flex-end; }
-        .input-bar textarea { flex: 1; padding: 14px 18px; border: 1.5px solid var(--c-border); border-radius: 12px; font-size: 14px; font-family: inherit; outline: none; resize: none; height: 50px; line-height: 1.5; transition: border-color .15s; background: var(--c-surface); box-shadow: var(--shadow); }
-        .input-bar textarea:focus { border-color: var(--c-accent); }
-        .input-bar button { padding: 0 28px; height: 50px; background: var(--c-accent); color: #fff; border: none; border-radius: 12px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: opacity .15s; }
-        .input-bar button:hover { opacity: .9; }
-        .input-bar button:disabled { opacity: .3; cursor: not-allowed; }
+        .input-wrap {
+            flex-shrink: 0; padding: 16px 20px 24px;
+            background: linear-gradient(transparent, var(--c-bg) 20%);
+        }
+        .input-inner {
+            max-width: var(--chat-max); margin: 0 auto;
+            display: flex; gap: 10px; align-items: flex-end;
+            padding: 8px; background: var(--c-surface);
+            border: 1px solid var(--c-border); border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-md);
+            transition: border-color .15s, box-shadow .15s;
+        }
+        .input-inner:focus-within {
+            border-color: var(--c-accent);
+            box-shadow: 0 0 0 3px rgba(99,102,241,.12), var(--shadow-md);
+        }
+        .input-inner textarea {
+            flex: 1; padding: 10px 8px; border: none; outline: none; resize: none;
+            font-size: 15px; font-family: inherit; line-height: 1.5;
+            min-height: 24px; max-height: 160px; background: transparent;
+        }
+        .input-inner textarea::placeholder { color: #9ca3af; }
+        .btn-send {
+            flex-shrink: 0; width: 44px; height: 44px;
+            border: none; border-radius: 12px; background: var(--c-accent); color: #fff;
+            cursor: pointer; display: flex; align-items: center; justify-content: center;
+            transition: background .15s, transform .1s;
+        }
+        .btn-send:hover:not(:disabled) { background: var(--c-accent-hover); transform: scale(1.02); }
+        .btn-send:disabled { opacity: .35; cursor: not-allowed; transform: none; }
+        .input-hint { max-width: var(--chat-max); margin: 8px auto 0; font-size: 11px; color: var(--c-muted); text-align: center; }
 
         /* Modal */
-        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 100; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(4px); }
-        .modal { background: var(--c-surface); border-radius: 12px; width: 640px; max-height: 78vh; overflow-y: auto; box-shadow: 0 8px 40px rgba(0,0,0,.15); }
-        .modal-header { padding: 20px 24px; border-bottom: 1px solid var(--c-border); display: flex; justify-content: space-between; align-items: center; font-weight: 700; font-size: 16px; }
-        .modal-close { cursor: pointer; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 6px; font-size: 18px; color: var(--c-muted); transition: all .12s; }
-        .modal-close:hover { background: #f5f5f5; color: var(--c-text); }
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(17,24,39,.5); z-index: 100;
+            display: flex; align-items: center; justify-content: center; padding: 20px;
+            backdrop-filter: blur(6px);
+        }
+        .modal {
+            background: var(--c-surface); border-radius: var(--radius-lg);
+            width: 100%; max-width: 680px; max-height: 85vh; overflow-y: auto;
+            box-shadow: 0 24px 48px rgba(0,0,0,.18); border: 1px solid var(--c-border);
+        }
+        .modal-header {
+            padding: 20px 24px; border-bottom: 1px solid var(--c-border);
+            display: flex; justify-content: space-between; align-items: center;
+            font-weight: 700; font-size: 17px; position: sticky; top: 0; background: var(--c-surface); z-index: 1;
+        }
+        .modal-close {
+            cursor: pointer; width: 32px; height: 32px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 8px; font-size: 20px; color: var(--c-muted);
+            border: none; background: transparent; transition: background .12s;
+        }
+        .modal-close:hover { background: #f3f4f6; color: var(--c-text); }
         .modal-body { padding: 24px; }
         .modal-body table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .modal-body th { padding: 10px 14px; text-align: left; border-bottom: 2px solid var(--c-border); font-size: 11px; font-weight: 600; color: var(--c-muted); text-transform: uppercase; letter-spacing: .04em; }
-        .modal-body td { padding: 10px 14px; border-bottom: 1px solid #f5f5f5; vertical-align: middle; }
-        .modal-body td.mono { font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; }
-        .modal-body button.sm { padding: 5px 14px; font-size: 12px; border: 1px solid var(--c-border); border-radius: 6px; background: var(--c-surface); cursor: pointer; transition: all .1s; font-weight: 500; }
-        .modal-body button.sm:hover { background: #f5f5f5; }
-        .modal-body button.sm.danger { color: var(--c-danger); border-color: var(--c-danger); }
+        .modal-body th {
+            padding: 10px 14px; text-align: left; border-bottom: 2px solid var(--c-border);
+            font-size: 11px; font-weight: 600; color: var(--c-muted);
+            text-transform: uppercase; letter-spacing: .04em;
+        }
+        .modal-body td { padding: 12px 14px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+        .modal-body td.mono { font-family: var(--mono); font-size: 12px; }
+        .modal-body button.sm {
+            padding: 6px 14px; font-size: 12px; font-family: inherit;
+            border: 1px solid var(--c-border); border-radius: 8px;
+            background: var(--c-surface); cursor: pointer; font-weight: 500; margin-right: 6px;
+        }
+        .modal-body button.sm:hover { background: #f9fafb; }
+        .modal-body button.sm.danger { color: var(--c-danger); border-color: #fecaca; }
         .modal-body button.sm.danger:hover { background: var(--c-danger-soft); }
-        .modal-body form { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; padding-top: 20px; border-top: 2px solid var(--c-border); }
-        .modal-body form input, .modal-body form select { padding: 9px 12px; border: 1.5px solid var(--c-border); border-radius: 6px; font-size: 13px; outline: none; transition: border-color .15s; }
-        .modal-body form input:focus, .modal-body form select:focus { border-color: var(--c-accent); }
-        .modal-body form button { grid-column: span 2; padding: 10px; background: var(--c-accent); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
-        .modal-body form button:hover { opacity: .9; }
-        .modal-body .hint { font-size: 12px; color: var(--c-muted); }
+        .modal-body form {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+            margin-top: 20px; padding-top: 20px; border-top: 2px solid var(--c-border);
+        }
+        .modal-body form input {
+            padding: 10px 12px; border: 1px solid var(--c-border); border-radius: 8px;
+            font-size: 13px; font-family: inherit;
+        }
+        .modal-body form input:focus { border-color: var(--c-accent); box-shadow: 0 0 0 3px rgba(99,102,241,.12); }
+        .modal-body form button[type=submit] {
+            grid-column: span 2; padding: 11px; background: var(--c-accent); color: #fff;
+            border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; font-family: inherit;
+        }
 
-        .toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: #1a1a1a; color: #fff; padding: 10px 24px; border-radius: 8px; font-size: 13px; z-index: 999; box-shadow: 0 4px 16px rgba(0,0,0,.15); }
+        .toast {
+            position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+            background: #1f2937; color: #fff; padding: 12px 20px; border-radius: 10px;
+            font-size: 14px; z-index: 999; box-shadow: var(--shadow-md);
+            animation: toastIn .25s ease;
+        }
+        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(8px); } }
 
-        .md { line-height: 1.75; }
-        .md p { margin: 0 0 8px; }
+        .md { line-height: 1.7; font-size: 15px; }
+        .md p { margin: 0 0 10px; }
         .md p:last-child { margin-bottom: 0; }
-        .md code { background: #f5f5f5; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: 'SF Mono', 'Fira Code', monospace; }
-        .md pre { background: #1e1e1e; color: #e0e0e0; padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: 8px 0; font-size: 13px; line-height: 1.5; }
-        .md pre code { background: none; padding: 0; color: inherit; font-size: inherit; }
-        .md ul, .md ol { margin: 6px 0; padding-left: 20px; }
-        .md li { margin: 2px 0; }
-        .md h1, .md h2, .md h3 { margin: 12px 0 6px; font-weight: 600; }
-        .md h1 { font-size: 18px; } .md h2 { font-size: 16px; } .md h3 { font-size: 15px; }
-        .md blockquote { border-left: 3px solid #d4d4d8; padding-left: 12px; color: var(--c-muted); margin: 8px 0; }
+        .md code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: var(--mono); }
+        .md pre { background: #1e1e2e; color: #e2e8f0; padding: 14px 16px; border-radius: var(--radius); overflow-x: auto; margin: 10px 0; font-size: 13px; }
+        .md pre code { background: none; padding: 0; color: inherit; }
+        .md ul, .md ol { margin: 8px 0; padding-left: 22px; }
+        .md h1, .md h2, .md h3 { margin: 14px 0 8px; font-weight: 600; }
+        .md h1 { font-size: 1.25em; } .md h2 { font-size: 1.1em; }
+        .md blockquote { border-left: 3px solid var(--c-accent); padding-left: 14px; color: var(--c-muted); margin: 10px 0; }
         .md a { color: var(--c-accent); }
-        .md table { border-collapse: collapse; width: 100%; margin: 8px 0; }
-        .md th, .md td { border: 1px solid var(--c-border); padding: 6px 10px; text-align: left; font-size: 13px; }
-        .md th { background: #f8f8f8; font-weight: 600; }
-        .md hr { border: none; border-top: 1px solid var(--c-border); margin: 12px 0; }
+        .md table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
+        .md th, .md td { border: 1px solid var(--c-border); padding: 8px 12px; }
+        .md th { background: #f9fafb; }
 
-        /* Tags */
         .tag-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
-        .tag { display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; background: var(--c-accent-soft); border: 1px solid #e0e7ff; border-radius: 20px; font-size: 12px; font-weight: 500; white-space: nowrap; }
-        .tag .tag-x { cursor: pointer; width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; font-size: 12px; color: var(--c-muted); transition: all .1s; margin-left: 2px; }
+        .tag {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 4px 12px; background: var(--c-accent-soft);
+            border: 1px solid #e0e7ff; border-radius: 20px; font-size: 12px; font-weight: 500;
+        }
+        .tag .tag-x { cursor: pointer; width: 18px; height: 18px; border-radius: 50%;
+            display: inline-flex; align-items: center; justify-content: center;
+            font-size: 12px; color: var(--c-muted); }
         .tag .tag-x:hover { background: #e0e7ff; color: var(--c-danger); }
-        .tag-add { padding: 4px 12px; border: 1.5px dashed #d4d4d8; border-radius: 20px; font-size: 12px; background: transparent; cursor: pointer; color: var(--c-muted); outline: none; min-width: 72px; transition: border-color .15s; }
-        .tag-add:focus { border-color: var(--c-accent); color: var(--c-accent); }
+        .tag-add {
+            padding: 4px 12px; border: 1.5px dashed #d1d5db; border-radius: 20px;
+            font-size: 12px; background: transparent; cursor: pointer; color: var(--c-muted);
+            font-family: inherit; min-width: 80px;
+        }
 
-        .sessions { flex: 1; overflow-y: auto; margin: 4px -8px 0; }
-        .sessions .item { padding: 8px 12px; border-radius: 6px; cursor: pointer; font-size: 13px; color: var(--c-sidebar-text); display: flex; justify-content: space-between; align-items: center; transition: all .1s; }
-        .sessions .item:hover { background: var(--c-sidebar-hover); color: #ddd; }
-        .sessions .item.active { background: rgba(165,180,252,.12); color: #c7d2fe; }
-        .sessions .item .txt { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .sessions .item .del { opacity: 0; font-size: 11px; color: #f87171; margin-left: 6px; flex-shrink: 0; }
-        .sessions .item:hover .del { opacity: 1; }
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .chat-header { padding: 12px 16px; }
+            .thread { padding: 16px 12px; }
+            .input-wrap { padding: 12px; }
+        }
     </style>
 </head>
 <body>
 <div id="app">
     <div v-if="!user" class="auth-wrap">
         <div class="auth-box">
-            <h2>{{ isLogin ? '登录' : '注册' }}</h2>
+            <div class="auth-logo">V</div>
+            <h2>{{ isLogin ? '欢迎回来' : '创建账号' }}</h2>
+            <p class="auth-sub">{{ isLogin ? '登录以继续使用 vollocAI' : '注册后即可开始对话' }}</p>
             <div v-if="authErr" class="auth-err">{{ authErr }}</div>
-            <input v-model="authForm.username" placeholder="用户名" @keyup.enter="doAuth">
-            <input v-model="authForm.password" type="password" placeholder="密码" @keyup.enter="doAuth">
-            <button @click="doAuth" :disabled="authLoading">{{ authLoading ? '...' : (isLogin ? '登录' : '注册') }}</button>
+            <input v-model="authForm.username" placeholder="用户名" autocomplete="username" @keyup.enter="doAuth">
+            <input v-model="authForm.password" type="password" placeholder="密码" autocomplete="current-password" @keyup.enter="doAuth">
+            <button class="btn-primary" @click="doAuth" :disabled="authLoading">{{ authLoading ? '请稍候…' : (isLogin ? '登录' : '注册') }}</button>
             <div class="auth-switch" @click="isLogin=!isLogin;authErr=''">{{ isLogin ? '没有账号？去注册' : '已有账号？去登录' }}</div>
         </div>
     </div>
 
     <div v-else class="app-layout">
         <aside class="sidebar">
-            <div class="brand">vollocAI</div>
-            <select v-model="selectedModelId" :disabled="!models.length">
+            <div class="brand"><span class="brand-mark">V</span> vollocAI</div>
+            <div class="sidebar-label">模型</div>
+            <select v-model="selectedModelId" :disabled="!models.length" aria-label="选择模型">
                 <option :value="0" disabled>{{ models.length ? '选择模型' : '无可用模型' }}</option>
                 <option v-for="m in models" :key="m.id" :value="m.id">{{ m.aiApiModel }}</option>
             </select>
+            <button type="button" class="btn-new-chat" @click="newSession">＋ 新建会话</button>
+            <div class="sidebar-label">历史会话</div>
             <div class="sessions">
                 <div v-for="s in sessions" :key="s.sessionId" :class="['item', { active: s.sessionId === sessionId }]" @click="openSession(s)">
+                    <span class="ico">💬</span>
                     <span class="txt">{{ s.title || '新会话' }}</span>
-                    <span class="del" @click.stop="delSession(s.sessionId)">×</span>
+                    <span class="del" role="button" aria-label="删除会话" @click.stop="delSession(s.sessionId)">×</span>
                 </div>
             </div>
-            <button @click="newSession">新建会话</button>
-            <button v-if="role==='admin'" class="admin-btn" @click="openModels">模型管理</button>
-            <button v-if="role==='admin'" class="admin-btn" @click="openAssign">分配管理</button>
+            <button v-if="role==='admin'" type="button" class="nav-btn admin" @click="openModels">模型管理</button>
+            <button v-if="role==='admin'" type="button" class="nav-btn admin" @click="openAssign">分配管理</button>
             <div class="meta">
-                <span>{{ authForm.username || 'dev' }} <span v-if="role==='admin'" style="color:#a5b4fc">· admin</span></span>
+                <span>{{ authForm.username || '用户' }}<span v-if="role==='admin'" class="badge-admin">admin</span></span>
                 <span class="link" @click="logout">退出</span>
             </div>
         </aside>
 
         <main class="main">
+            <header class="chat-header">
+                <h1>对话</h1>
+                <span class="model-tag">{{ currentModelName }}</span>
+            </header>
             <div class="thread" ref="chatArea">
-                <div v-if="messages.length===0" class="empty">输入内容开始对话</div>
-                <div v-for="(m,i) in messages" :key="i" :class="['turn', m.role]">
-                    <div class="label">{{ m.role === 'user' ? 'You' : 'Assistant' }}</div>
-                    <div class="body">
-                        <div v-if="m.role==='assistant'" class="md" v-html="renderMd(m.text)"></div>
-                        <div v-else>{{ m.text }}</div>
-                        <img v-if="m.image" :src="m.image" alt="output">
-                        <audio v-if="m.audio" controls :src="m.audio"></audio>
-                        <div class="stamp">{{ m.time }}</div>
+                <div class="thread-inner">
+                    <div v-if="messages.length===0" class="empty-state">
+                        <div class="icon">✦</div>
+                        <h2>有什么可以帮你？</h2>
+                        <p>支持 ReAct 工具链可视化，知识库检索与流式回答</p>
+                        <div class="suggestions">
+                            <button type="button" v-for="s in suggestions" :key="s" @click="useSuggestion(s)">{{ s }}</button>
+                        </div>
+                    </div>
+                    <div v-for="(m,i) in messages" :key="i" :class="['turn', m.role]">
+                        <div class="turn-row">
+                            <div class="avatar" aria-hidden="true">{{ m.role === 'user' ? '我' : 'AI' }}</div>
+                            <div class="bubble">
+                                <div v-if="m.role==='assistant' && m.text==='...'" class="bubble-content loading">
+                                    <span class="typing-dots" aria-label="正在生成"><span></span><span></span><span></span></span>
+                                    思考中
+                                </div>
+                                <div v-else-if="m.role==='assistant'" class="bubble-content md" v-html="renderMd(m.text)"></div>
+                                <div v-else class="bubble-content">{{ m.text }}</div>
+
+                                <div v-if="m.role==='assistant' && m.steps && m.steps.length" class="react-wrap">
+                                    <div class="react-head" @click="m.reactOpen = !m.reactOpen" :aria-expanded="m.reactOpen">
+                                        <span>工具链 <span class="count">{{ m.steps.length }}</span></span>
+                                        <span>{{ m.reactOpen ? '收起 ▲' : '展开 ▼' }}</span>
+                                    </div>
+                                    <div v-if="m.reactOpen">
+                                        <div v-if="m.reactStatus" class="react-live">{{ m.reactStatus }}</div>
+                                        <div class="react-body">
+                                            <div v-for="(s,si) in m.steps" :key="si" :class="['react-item', s.type]">
+                                                <span class="react-badge">{{ reactBadge(s.type) }}</span>
+                                                <span class="react-text">{{ s.text }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <img v-if="m.image" :src="m.image" alt="生成图片">
+                                <audio v-if="m.audio" controls :src="m.audio"></audio>
+                                <div v-if="m.time" class="stamp">{{ m.time }}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="input-bar">
-                <textarea v-model="input" placeholder="输入内容，Enter 发送" @keydown.enter.exact.prevent="send" :disabled="!selectedModelId" rows="1"></textarea>
-                <button @click="send" :disabled="!input.trim() || !selectedModelId">发送</button>
+            <div class="input-wrap">
+                <div class="input-inner">
+                    <textarea
+                        ref="inputEl"
+                        v-model="input"
+                        placeholder="输入问题，Enter 发送，Shift+Enter 换行"
+                        @keydown="onInputKeydown"
+                        :disabled="!selectedModelId || sending"
+                        rows="1"
+                    ></textarea>
+                    <button type="button" class="btn-send" @click="send" :disabled="!input.trim() || !selectedModelId || sending" aria-label="发送">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+                    </button>
+                </div>
+                <p class="input-hint">显式 ReAct 调度 · 工具耗时可在时间线查看</p>
             </div>
         </main>
     </div>
 
-    <!-- 模型管理面板 -->
     <div v-if="showModels" class="modal-overlay" @click.self="showModels=false">
-        <div class="modal">
-            <div class="modal-header"><span>模型管理</span><span class="modal-close" @click="showModels=false">&times;</span></div>
+        <div class="modal" role="dialog" aria-labelledby="modal-models-title">
+            <div class="modal-header">
+                <span id="modal-models-title">模型管理</span>
+                <button type="button" class="modal-close" aria-label="关闭" @click="showModels=false">&times;</button>
+            </div>
             <div class="modal-body">
                 <table>
                     <thead><tr><th>ID</th><th>模型名</th><th>API URL</th><th>操作</th></tr></thead>
@@ -213,8 +581,8 @@
                             <td class="mono">{{ m.aiApiModel }}</td>
                             <td class="mono">{{ m.aiApiUrl }}</td>
                             <td>
-                                <button class="sm" @click="editModel(m)">编辑</button>
-                                <button class="sm danger" @click="delModel(m.id)">删除</button>
+                                <button type="button" class="sm" @click="editModel(m)">编辑</button>
+                                <button type="button" class="sm danger" @click="delModel(m.id)">删除</button>
                             </td>
                         </tr>
                     </tbody>
@@ -223,23 +591,25 @@
                     <input v-model="form.key" placeholder="API Key" required>
                     <input v-model="form.url" placeholder="API URL" required>
                     <input v-model="form.model" placeholder="模型名" required>
-                    <button>{{ editingId ? '保存修改' : '添加模型' }}</button>
-                    <button type="button" v-if="editingId" @click="editingId=null;form.key='';form.url='';form.model=''" style="background:var(--c-surface);color:var(--c-text);border:1px solid var(--c-border)">取消编辑</button>
+                    <button type="submit">{{ editingId ? '保存修改' : '添加模型' }}</button>
+                    <button type="button" v-if="editingId" @click="editingId=null;form.key='';form.url='';form.model=''" style="grid-column:span 2;background:#fff;color:var(--c-text);border:1px solid var(--c-border)">取消编辑</button>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- 分配管理面板 -->
     <div v-if="showAssign" class="modal-overlay" @click.self="showAssign=false">
-        <div class="modal">
-            <div class="modal-header"><span>分配管理</span><span class="modal-close" @click="showAssign=false">&times;</span></div>
+        <div class="modal" role="dialog" aria-labelledby="modal-assign-title">
+            <div class="modal-header">
+                <span id="modal-assign-title">分配管理</span>
+                <button type="button" class="modal-close" aria-label="关闭" @click="showAssign=false">&times;</button>
+            </div>
             <div class="modal-body">
                 <table>
                     <thead><tr><th>用户</th><th>已分配模型</th></tr></thead>
                     <tbody>
                         <tr v-for="u in allUsers" :key="u.id">
-                            <td style="vertical-align:top;padding-top:10px;white-space:nowrap">{{ u.username }}<br><span style="font-size:11px;color:var(--c-muted)">ID:{{ u.id }}</span></td>
+                            <td style="vertical-align:top;padding-top:12px;white-space:nowrap">{{ u.username }}<br><span style="font-size:11px;color:var(--c-muted)">ID:{{ u.id }}</span></td>
                             <td>
                                 <div class="tag-list">
                                     <span v-for="m in modelsOfUser(u.id)" :key="m.id" class="tag">
@@ -260,11 +630,11 @@
         </div>
     </div>
 
-    <div v-if="toast" class="toast">{{ toast }}</div>
+    <div v-if="toast" class="toast" role="status">{{ toast }}</div>
 </div>
 
 <script>
-const { createApp, ref, reactive, nextTick, onMounted } = Vue;
+const { createApp, ref, reactive, computed, nextTick, onMounted } = Vue;
 createApp({
     setup() {
         const BASE = '';
@@ -274,8 +644,15 @@ createApp({
         const storedRole = localStorage.getItem('role');
         const role = ref((storedRole && storedRole !== 'dev-role') ? storedRole : 'user');
         const isLogin = ref(true);
-        const authErr = ref(''); const authLoading = ref(false);
+        const authErr = ref('');
+        const authLoading = ref(false);
         const authForm = reactive({ username: '', password: '' });
+
+        const suggestions = [
+            'RAG 和 Milvus 是什么关系？',
+            '查询当前告警',
+            '帮我计算 (128+256)*3'
+        ];
 
         const doAuth = async () => {
             if (!authForm.username || !authForm.password) { authErr.value = '请填写完整'; return; }
@@ -299,38 +676,173 @@ createApp({
             } catch (e) { authErr.value = '网络异常'; }
             finally { authLoading.value = false; }
         };
-        const logout = () => { localStorage.removeItem('satoken'); localStorage.removeItem('role'); token.value = ''; user.value = null; messages.value = []; models.value = []; role.value = 'user'; };
+        const logout = () => {
+            localStorage.removeItem('satoken'); localStorage.removeItem('role');
+            token.value = ''; user.value = null; messages.value = []; models.value = []; role.value = 'user';
+        };
 
-        // Chat
-        const input = ref(''); const messages = ref([]); const chatArea = ref(null);
+        const input = ref('');
+        const inputEl = ref(null);
+        const messages = ref([]);
+        const chatArea = ref(null);
+        const sending = ref(false);
         const sessionId = ref(crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36));
-        const selectedModelId = ref(0); const models = ref([]); const toast = ref('');
+        const selectedModelId = ref(0);
+        const models = ref([]);
+        const toast = ref('');
+
+        const currentModelName = computed(() => {
+            const m = models.value.find(x => x.id === selectedModelId.value);
+            return m ? m.aiApiModel : '未选择模型';
+        });
+
+        const reactBadge = (type) => ({ act: 'ACT', obs: 'OBS', state: 'STATE', err: 'ERR' }[type] || type.toUpperCase());
+
+        const resizeInput = () => {
+            const el = inputEl.value;
+            if (!el) return;
+            el.style.height = 'auto';
+            el.style.height = Math.min(el.scrollHeight, 160) + 'px';
+        };
+
+        const onInputKeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+        };
+
+        const useSuggestion = (text) => { input.value = text; nextTick(resizeInput); };
 
         const loadModels = async () => {
             try {
                 const res = await fetch(BASE + '/ai/selectModelByUserId', { headers: { satoken: token.value } });
                 const data = await res.json();
-                if (data.success) { models.value = data.data || []; if (models.value.length) selectedModelId.value = models.value[0].id; }
+                if (data.success) {
+                    models.value = data.data || [];
+                    if (models.value.length) selectedModelId.value = models.value[0].id;
+                }
             } catch (e) {}
         };
 
-        /** SSE 流式订阅：每个 token 推一个，前端逐字渲染 */
-        const sseSubscribe = (taskId, placeholderIdx) => {
-            const es = new EventSource(BASE + '/ai/stream/' + taskId + '?satoken=' + token.value);
-            let fullText = '', closed = false;
-            es.onmessage = (e) => {
-                if (closed) return;
-                if (e.data === '[DONE]') { es.close(); closed = true; loadSessions(); return; }
-                if (e.data.startsWith('ERROR:')) { es.close(); closed = true; messages.value[placeholderIdx] = { ...messages.value[placeholderIdx], text: e.data }; return; }
-                fullText += e.data;
-                messages.value[placeholderIdx] = { role: 'assistant', text: fullText, image: null, audio: null, time: new Date().toLocaleTimeString() };
-                nextTick(() => { if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight; });
-            };
-            es.onerror = () => { if (!closed) { es.close(); closed = true; } };
+        const STATE_LABEL = {
+            planning: '规划中', tool_start: '调用工具', tool_done: '工具完成',
+            finalizing: '生成结论', answering: '输出回答', parse_retry: '重试解析',
+            tool_limit: '工具次数已满', step_limit: '步数已满', error: '错误'
         };
 
-        const pushMsg = (role, text, image, audio) => { messages.value.push({ role, text, image: image || null, audio: audio || null, time: new Date().toLocaleTimeString() }); nextTick(() => { if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight; }); };
-        const send = async () => { const q = input.value.trim(); if (!q) return; pushMsg('user', q); input.value = ''; const placeholder = messages.value.length; pushMsg('assistant', '...'); try { const res = await fetch(BASE + '/ai/chat', { method: 'POST', headers: { 'Content-Type': 'application/json', satoken: token.value }, body: JSON.stringify({ question: q, id: selectedModelId.value, sessionId: sessionId.value }) }); const data = await res.json(); if (!data.success) { messages.value.splice(placeholder, 1); pushMsg('assistant', data.message || '请求失败'); return; } sseSubscribe(data.data, placeholder); } catch (e) { messages.value.splice(placeholder, 1); pushMsg('assistant', '网络异常'); } };
+        const sseSubscribe = (taskId, placeholderIdx) => {
+            let fullText = '', closed = false, retries = 0;
+            const steps = [];
+            let reactStatus = '';
+            let planBuf = '';
+
+            const parseJson = (s) => { try { return JSON.parse(s); } catch (e) { return null; } };
+            const payload = (line, prefixLen) => parseJson(line.slice(prefixLen).trim());
+
+            const parseStep = (data) => {
+                if (data.startsWith('[[ACT]]')) {
+                    const o = payload(data, 7);
+                    if (!o) return { type: 'act', text: data };
+                    return { type: 'act', text: `→ ${o.tool || ''} ${(o.input ?? '').toString()}`.trim() };
+                }
+                if (data.startsWith('[[OBS]]')) {
+                    const o = payload(data, 7);
+                    if (!o) return { type: 'obs', text: data };
+                    const head = `${o.tool || ''} · ${o.ms ?? 0}ms`;
+                    const body = o.error ? `✗ ${o.error}` : (o.output ?? '').toString();
+                    return { type: o.error ? 'err' : 'obs', text: `${head} ${body}`.trim() };
+                }
+                if (data.startsWith('[[STATE]]')) {
+                    const o = payload(data, 9);
+                    if (!o) return { type: 'state', text: data };
+                    const label = STATE_LABEL[o.state] || o.state;
+                    const step = o.step != null ? `#${o.step}` : '';
+                    const planMs = o.planMs != null ? ` · 规划${o.planMs}ms` : '';
+                    const msg = o.msg ? ` · ${o.msg}` : '';
+                    reactStatus = `${label}${step}${planMs}${msg}`;
+                    return { type: 'state', text: reactStatus };
+                }
+                if (data.startsWith('[[PLAN]]')) {
+                    const o = payload(data, 8);
+                    if (o && o.delta) planBuf += o.delta;
+                    return null;
+                }
+                return null;
+            };
+
+            const patch = (extra = {}) => {
+                const prev = messages.value[placeholderIdx] || {};
+                messages.value[placeholderIdx] = {
+                    role: 'assistant', text: fullText || prev.text, image: null, audio: null,
+                    time: new Date().toLocaleTimeString(),
+                    steps: [...steps], reactOpen: prev.reactOpen ?? steps.length > 0,
+                    reactStatus: reactStatus || (planBuf ? '调度输出中…' : ''),
+                    ...extra
+                };
+                nextTick(() => { if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight; });
+            };
+
+            const done = () => { sending.value = false; };
+
+            const connect = () => {
+                const es = new EventSource(BASE + '/ai/stream/' + taskId + '?satoken=' + token.value);
+                es.onmessage = (e) => {
+                    if (closed) return;
+                    if (e.data === '[DONE]') { es.close(); closed = true; done(); loadSessions(); return; }
+                    if (e.data.startsWith('ERROR:')) { es.close(); closed = true; patch({ text: e.data }); done(); return; }
+                    const step = parseStep(e.data);
+                    if (step) { steps.push(step); patch({ reactOpen: true, text: fullText || '...' }); return; }
+                    if (e.data.startsWith('[[PLAN]]')) { patch({ reactOpen: true, text: fullText || '...' }); return; }
+                    fullText += e.data;
+                    patch({ text: fullText });
+                };
+                es.onerror = () => {
+                    es.close();
+                    if (closed) return;
+                    if (retries++ < 3) { setTimeout(connect, 1000 * retries); return; }
+                    closed = true;
+                    patch({ text: fullText || '连接中断，请重试' });
+                    done();
+                };
+            };
+            connect();
+        };
+
+        const pushMsg = (role, text, image, audio) => {
+            const msg = { role, text, image: image || null, audio: audio || null, time: new Date().toLocaleTimeString() };
+            if (role === 'assistant') { msg.steps = []; msg.reactOpen = false; msg.reactStatus = ''; }
+            messages.value.push(msg);
+            nextTick(() => { if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight; });
+        };
+
+        const send = async () => {
+            const q = input.value.trim();
+            if (!q || sending.value) return;
+            pushMsg('user', q);
+            input.value = '';
+            nextTick(resizeInput);
+            const placeholder = messages.value.length;
+            pushMsg('assistant', '...');
+            sending.value = true;
+            try {
+                const res = await fetch(BASE + '/ai/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', satoken: token.value },
+                    body: JSON.stringify({ question: q, id: selectedModelId.value, sessionId: sessionId.value })
+                });
+                const data = await res.json();
+                if (!data.success) {
+                    messages.value.splice(placeholder, 1);
+                    pushMsg('assistant', data.message || '请求失败');
+                    sending.value = false;
+                    return;
+                }
+                sseSubscribe(data.data, placeholder);
+            } catch (e) {
+                messages.value.splice(placeholder, 1);
+                pushMsg('assistant', '网络异常');
+                sending.value = false;
+            }
+        };
+
         const sessions = ref([]);
 
         const loadSessions = async () => {
@@ -349,7 +861,10 @@ createApp({
                 const data = await res.json();
                 if (data.success && data.data.messages) {
                     const msgs = JSON.parse(data.data.messages);
-                    messages.value = msgs.map(m => ({ role: m.role, text: m.content, image: null, audio: null, time: '' }));
+                    messages.value = msgs.map(m => ({
+                        role: m.role, text: m.content, image: null, audio: null, time: '',
+                        steps: [], reactOpen: false, reactStatus: ''
+                    }));
                 }
             } catch (e) {}
         };
@@ -360,39 +875,31 @@ createApp({
             if (sid === sessionId.value) newSession();
         };
 
-        const newSession = () => { messages.value = []; sessionId.value = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36); loadSessions(); };
+        const newSession = () => {
+            messages.value = [];
+            sessionId.value = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36);
+            loadSessions();
+        };
 
         const renderMd = (text) => {
-            if (!text) return '';
+            if (!text || text === '...') return '';
             try {
-                // 1. 保护数学块，替换为占位符，避免 marked 破坏 LaTeX
                 const mathBlocks = [];
                 let protected_ = text
-                    // $$...$$ 和 \[...\] → display math
                     .replace(/\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]/g, (m, d1, d2) => {
                         mathBlocks.push({ display: true, tex: (d1 || d2).trim() });
-                        return `\n[MATH${mathBlocks.length-1}]\n`;
+                        return `\n[MATH${mathBlocks.length - 1}]\n`;
                     })
-                    // 独立行的 [ ... ] 含 LaTeX → display math
                     .replace(/^\s*\[\s*((?:\\.|[^\]])+)\s*\]\s*$/gm, (_, m) => {
                         if (!m.includes('\\')) return _;
                         mathBlocks.push({ display: true, tex: m.trim() });
-                        return `\n[MATH${mathBlocks.length-1}]\n`;
+                        return `\n[MATH${mathBlocks.length - 1}]\n`;
                     })
-                    // \(...\) → inline math
                     .replace(/\\\(([\s\S]*?)\\\)/g, (_, m) => {
                         mathBlocks.push({ display: false, tex: m.trim() });
-                        return `[MATH${mathBlocks.length-1}]`;
-                    })
-                    // 正文中的 LaTeX 命令序列 → 包成行内公式
-                    .replace(/((?:\\[a-zA-Z]+(?:\{[^}]*\})?\s*)+)/g, (m) => {
-                        if (m.length < 4) return m;
-                        mathBlocks.push({ display: false, tex: m.trim() });
-                        return `[MATH${mathBlocks.length-1}]`;
+                        return `[MATH${mathBlocks.length - 1}]`;
                     });
-                // 2. Markdown → HTML
                 let html = marked.parse(protected_);
-                // 3. 数学占位符 → KaTeX
                 html = html.replace(/\[MATH(\d+)\]/g, (_, i) => {
                     const b = mathBlocks[parseInt(i)];
                     try { return katex.renderToString(b.tex, { displayMode: b.display, throwOnError: false }); }
@@ -402,9 +909,10 @@ createApp({
             } catch (e) { return text; }
         };
 
-        // Admin - 通用
-        const showModels = ref(false); const showAssign = ref(false);
-        const allModels = ref([]); const allUsers = ref([]);
+        const showModels = ref(false);
+        const showAssign = ref(false);
+        const allModels = ref([]);
+        const allUsers = ref([]);
         const assignedSet = reactive({});
         const form = reactive({ key: '', url: '', model: '' });
         const editingId = ref(null);
@@ -415,17 +923,18 @@ createApp({
                     fetch(BASE + '/ai/admin/models', { headers: { satoken: token.value } }),
                     fetch(BASE + '/ai/admin/users', { headers: { satoken: token.value } })
                 ]);
-                const md = await mr.json(); const ud = await ur.json();
-                if (md.success) { allModels.value = md.data || []; allModels.value.forEach(m => assignedSet[m.id] = new Set(m.assignedUserIds || [])); }
+                const md = await mr.json();
+                const ud = await ur.json();
+                if (md.success) {
+                    allModels.value = md.data || [];
+                    allModels.value.forEach(m => { assignedSet[m.id] = new Set(m.assignedUserIds || []); });
+                }
                 if (ud.success) allUsers.value = ud.data || [];
             } catch (e) {}
         };
 
-        // ---- 模型管理 ----
         const openModels = () => { loadAdminData(); showModels.value = true; };
-
         const editModel = (m) => { editingId.value = m.id; form.key = ''; form.url = m.aiApiUrl; form.model = m.aiApiModel; };
-
         const addModel = async () => {
             try {
                 const res = await fetch(BASE + '/ai/admin/models', {
@@ -436,9 +945,8 @@ createApp({
                 if (data.success) { form.key = ''; form.url = ''; form.model = ''; loadAdminData(); }
                 else toast.value = data.message || '添加失败';
             } catch (e) { toast.value = '网络异常'; }
-            setTimeout(() => toast.value = '', 2500);
+            setTimeout(() => { toast.value = ''; }, 2500);
         };
-
         const updateModel = async () => {
             try {
                 const res = await fetch(BASE + '/ai/admin/models/' + editingId.value, {
@@ -449,9 +957,8 @@ createApp({
                 if (data.success) { editingId.value = null; form.key = ''; form.url = ''; form.model = ''; loadAdminData(); }
                 else toast.value = data.message || '修改失败';
             } catch (e) { toast.value = '网络异常'; }
-            setTimeout(() => toast.value = '', 2500);
+            setTimeout(() => { toast.value = ''; }, 2500);
         };
-
         const delModel = async (id) => {
             if (!confirm('确认删除模型 ' + id + '？')) return;
             try {
@@ -459,15 +966,12 @@ createApp({
                 const data = await res.json();
                 data.success ? loadAdminData() : toast.value = data.message || '删除失败';
             } catch (e) { toast.value = '网络异常'; }
-            setTimeout(() => toast.value = '', 2500);
+            setTimeout(() => { toast.value = ''; }, 2500);
         };
 
-        // ---- 分配管理 ----
         const openAssign = () => { loadAdminData(); showAssign.value = true; };
-
         const modelsOfUser = (uid) => allModels.value.filter(m => assignedSet[m.id] && assignedSet[m.id].has(uid));
         const modelsNotOfUser = (uid) => allModels.value.filter(m => !assignedSet[m.id] || !assignedSet[m.id].has(uid));
-
         const toggleAssign = async (modelId, userId, checked) => {
             if (!assignedSet[modelId]) assignedSet[modelId] = new Set();
             if (checked) assignedSet[modelId].add(userId); else assignedSet[modelId].delete(userId);
@@ -481,21 +985,40 @@ createApp({
             } catch (e) {
                 if (checked) assignedSet[modelId].delete(userId); else assignedSet[modelId].add(userId);
                 toast.value = '操作失败';
-                setTimeout(() => toast.value = '', 2500);
+                setTimeout(() => { toast.value = ''; }, 2500);
             }
         };
 
         onMounted(() => {
             if (token.value) {
                 role.value = localStorage.getItem('role') || 'user';
-                fetch(BASE + '/ai/selectModelByUserId', { headers: { satoken: token.value } }).then(r => r.json()).then(d => {
-                    if (d.success) { user.value = { username: '已登录' }; models.value = d.data || []; if (models.value.length) selectedModelId.value = models.value[0].id; loadSessions(); }
-                    else { localStorage.removeItem('satoken'); localStorage.removeItem('role'); token.value = ''; role.value = 'user'; }
-                }).catch(() => {});
+                fetch(BASE + '/ai/selectModelByUserId', { headers: { satoken: token.value } })
+                    .then(r => r.json())
+                    .then(d => {
+                        if (d.success) {
+                            user.value = { username: '已登录' };
+                            models.value = d.data || [];
+                            if (models.value.length) selectedModelId.value = models.value[0].id;
+                            loadSessions();
+                        } else {
+                            localStorage.removeItem('satoken');
+                            localStorage.removeItem('role');
+                            token.value = '';
+                            role.value = 'user';
+                        }
+                    }).catch(() => {});
             }
         });
 
-        return { user, token, role, isLogin, authErr, authLoading, authForm, doAuth, logout, input, messages, chatArea, sessionId, selectedModelId, models, sessions, send, newSession, openSession, delSession, toast, showModels, showAssign, allModels, allUsers, assignedSet, form, editingId, openModels, openAssign, editModel, addModel, updateModel, delModel, toggleAssign, modelsOfUser, modelsNotOfUser, renderMd };
+        return {
+            user, token, role, isLogin, authErr, authLoading, authForm, doAuth, logout,
+            input, inputEl, messages, chatArea, sending, sessionId, selectedModelId, models,
+            sessions, send, newSession, openSession, delSession, toast,
+            showModels, showAssign, allModels, allUsers, assignedSet, form, editingId,
+            openModels, openAssign, editModel, addModel, updateModel, delModel,
+            toggleAssign, modelsOfUser, modelsNotOfUser, renderMd,
+            suggestions, useSuggestion, onInputKeydown, currentModelName, reactBadge
+        };
     }
 }).mount('#app');
 </script>

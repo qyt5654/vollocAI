@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.vollocAI.ai.dao.ModelAssignmentDao">
+<mapper namespace="com.vollocAI.ai.model.dao.ModelAssignmentDao">
 
     <insert id="insert" keyProperty="id" useGeneratedKeys="true">
         insert into model_assignment(model_id, user_id) values (#{modelId}, #{userId})

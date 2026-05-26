@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.vollocAI.ai.dao.AiTaskDao">
+<mapper namespace="com.vollocAI.ai.task.dao.AiTaskDao">
 
-    <resultMap type="com.vollocAI.ai.entity.AiTask" id="AiTaskMap">
+    <resultMap type="com.vollocAI.ai.task.AiTask" id="AiTaskMap">
         <result property="id" column="id" jdbcType="BIGINT"/>
         <result property="taskId" column="task_id" jdbcType="VARCHAR"/>
         <result property="userId" column="user_id" jdbcType="BIGINT"/>

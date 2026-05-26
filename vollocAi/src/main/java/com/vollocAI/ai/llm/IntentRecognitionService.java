@@ -1,0 +1,53 @@
+package com.vollocAI.ai.llm;
+
+import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.JSONObject;
+import com.vollocAI.ai.agent.ReactProtocol;
+import jakarta.annotation.Resource;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+
+/** 意图识别 —— LLM 判媒介(text/image/voice) + 复杂度(simple/deep) */
+@Service
+public class IntentRecognitionService {
+
+    private static final Logger log = LoggerFactory.getLogger(IntentRecognitionService.class);
+    @Resource private ChatModel chatModel;
+
+    private static final String PROMPT = """
+        分析用户输入，返回 JSON（不要 markdown）：
+        {"intent":"text|image|voice","content":"提炼后的内容","deep":true|false}
+        - 画图/生成图片→image，朗读/语音→voice
+        - deep=true: 多步调查、根因分析、故障复盘、运维报告、综合排查
+        - deep=false: 普通问答、概念解释、简单计算、闲聊
+        """;
+
+    public IntentResult recognize(String query) {
+        String raw = chatModel.call(new Prompt(List.of(
+                new SystemMessage(PROMPT), new UserMessage(query)
+        ))).getResult().getOutput().getContent();
+        log.info("意图识别: {}", raw);
+        JSONObject obj = parse(raw);
+        if (obj == null) return new IntentResult("text", query, false);
+        String intent = obj.getString("intent"), content = obj.getString("content");
+        boolean deep = obj.getBooleanValue("deep");
+        if (intent == null || intent.isBlank()) intent = "text";
+        if (content == null || content.isBlank()) content = query;
+        return new IntentResult(intent, content, deep);
+    }
+
+    private static JSONObject parse(String raw) {
+        String json = ReactProtocol.extractJson(raw);
+        if (json == null) return null;
+        try { return JSON.parseObject(json); } catch (Exception e) { return null; }
+    }
+
+    public record IntentResult(String intent, String content, boolean deep) {}
+}

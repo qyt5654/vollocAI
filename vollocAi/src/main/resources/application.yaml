@@ -48,5 +48,17 @@ logging:
   level:
     cn.dev33.satoken: DEBUG
 
+milvus:
+  enabled: true
+
 server:
   port: 8001
+
+# 显式 ReAct Agent（非 Function Calling）
+volloc:
+  react:
+    max-tool-calls: 6
+    max-steps: 10
+    tool-timeout-ms: 30000
+    max-obs-in-context: 2000
+    model-cache-size: 32
