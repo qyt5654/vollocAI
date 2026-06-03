@@ -13,14 +13,9 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.image.ImagePrompt;
-import org.springframework.ai.image.ImageResponse;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.ai.openai.OpenAiImageModel;
-import org.springframework.ai.openai.OpenAiImageOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.ai.openai.api.OpenAiImageApi;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
@@ -42,6 +37,8 @@ public class MultimodalAIServiceImpl implements MultimodalAIService {
 
     private static final Logger logger = LoggerFactory.getLogger(MultimodalAIServiceImpl.class);
     private static final String VOICE_FILE_PATH = "/Users/yipingchuan/voice/";
+    @org.springframework.beans.factory.annotation.Value("${spring.ai.dashscope.api-key}")
+    private String dashScopeKey;
 
     @Override
     public reactor.core.publisher.Flux<String> streamChat(String query, String apiKey,
@@ -78,16 +75,64 @@ public class MultimodalAIServiceImpl implements MultimodalAIService {
 
     @Override
     public String generateImage(String query, String apiKey, String apiUrl, String modelName) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(java.time.Duration.ofSeconds(10));
-        factory.setReadTimeout(java.time.Duration.ofSeconds(120));
-        OpenAiImageApi api = new OpenAiImageApi(apiUrl, apiKey, RestClient.builder().requestFactory(factory));
-        OpenAiImageModel model = new OpenAiImageModel(api);
-        ImageResponse resp = model.call(new ImagePrompt("生成图片，内容为：" + query,
-                OpenAiImageOptions.builder().withN(1).withHeight(1024).withWidth(1024).build()));
-        String url = resp.getResult().getOutput().getUrl();
-        logger.info("图片生成 [{}]: {}", modelName, url);
-        return url;
+        // 图片生成使用 DashScope wanx-v1 模型，依赖 application.yaml 中 spring.ai.dashscope.api-key
+        // 不能用用户选的文本模型（qwen3-max 等），文本模型没有图片生成能力
+        return generateImageWithDashScope(query);
+    }
+
+    private static final String DASHSCOPE_IMG_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis";
+    private static final String DASHSCOPE_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks/";
+
+    private String generateImageWithDashScope(String query) {
+        try {
+            java.util.LinkedHashMap<String, Object> body = new java.util.LinkedHashMap<>();
+            body.put("model", "wanx-v1");
+            java.util.LinkedHashMap<String, Object> input = new java.util.LinkedHashMap<>();
+            input.put("prompt", query);
+            body.put("input", input);
+            java.util.LinkedHashMap<String, Object> params = new java.util.LinkedHashMap<>();
+            params.put("n", 1);
+            params.put("size", "1024*1024");
+            body.put("parameters", params);
+
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setBearerAuth(dashScopeKey);
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.set("X-DashScope-Async", "enable"); // 异步模式: DashScope要求异步调用
+            org.springframework.http.HttpEntity<?> request = new org.springframework.http.HttpEntity<>(body, headers);
+
+            org.springframework.web.client.RestTemplate rest = new org.springframework.web.client.RestTemplate();
+            org.springframework.http.ResponseEntity<String> resp = rest.postForEntity(DASHSCOPE_IMG_URL, request, String.class);
+            logger.info("图片生成任务提交: {}", resp.getBody());
+            com.alibaba.fastjson.JSONObject respJson = com.alibaba.fastjson.JSON.parseObject(resp.getBody());
+            if (respJson.containsKey("code")) {
+                return "图片生成失败: " + respJson.getString("code") + " - " + respJson.getString("message");
+            }
+            String taskId = respJson.getJSONObject("output").getString("task_id");
+
+            // 轮询任务状态，最多等60秒
+            for (int i = 0; i < 60; i++) {
+                Thread.sleep(2000);
+                org.springframework.http.HttpEntity<Void> taskReq = new org.springframework.http.HttpEntity<>(headers);
+                org.springframework.http.ResponseEntity<String> taskResp = rest.exchange(DASHSCOPE_TASK_URL + taskId,
+                        org.springframework.http.HttpMethod.GET, taskReq, String.class);
+                com.alibaba.fastjson.JSONObject taskJson = com.alibaba.fastjson.JSON.parseObject(taskResp.getBody());
+                String status = taskJson.getJSONObject("output").getString("task_status");
+                logger.info("图片任务状态[{}/{}]: {}", i + 1, taskId, status);
+                if ("SUCCEEDED".equals(status)) {
+                    String url = taskJson.getJSONObject("output").getJSONArray("results").getJSONObject(0).getString("url");
+                    logger.info("图片生成成功: {}", url);
+                    return url;
+                }
+                if ("FAILED".equals(status)) {
+                    return "图片生成失败: " + taskJson.getJSONObject("output").getString("message");
+                }
+            }
+            return "图片生成超时，请稍后重试";
+        } catch (Exception e) {
+            logger.error("图片生成失败", e);
+            return "图片生成失败: " + e.getMessage();
+        }
     }
 
     @Override

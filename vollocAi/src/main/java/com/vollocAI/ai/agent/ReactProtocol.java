@@ -61,10 +61,6 @@ public final class ReactProtocol {
         return null;
     }
 
-    public static JSONObject parseStep(String json) {
-        return JSON.parseObject(json);
-    }
-
     public static String clip(String s, int max) {
         if (s == null) return "";
         return s.length() <= max ? s : s.substring(0, max) + "...(truncated)";

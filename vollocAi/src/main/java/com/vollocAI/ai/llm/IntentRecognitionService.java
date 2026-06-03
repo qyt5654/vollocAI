@@ -21,12 +21,29 @@ public class IntentRecognitionService {
     private static final Logger log = LoggerFactory.getLogger(IntentRecognitionService.class);
     @Resource private ChatModel chatModel;
 
+//    private static final String PROMPT = """
+//        分析用户输入，返回 JSON（不要 markdown）：
+//        {"intent":"text|image|voice","content":"提炼后的内容","deep":true|false}
+//        - 画图/生成图片→image，朗读/语音→voice
+//        - deep=true: 多步调查、根因分析、故障复盘、运维报告、综合排查
+//        - deep=false: 普通问答、概念解释、简单计算、闲聊
+//        """;
     private static final String PROMPT = """
         分析用户输入，返回 JSON（不要 markdown）：
-        {"intent":"text|image|voice","content":"提炼后的内容","deep":true|false}
-        - 画图/生成图片→image，朗读/语音→voice
-        - deep=true: 多步调查、根因分析、故障复盘、运维报告、综合排查
-        - deep=false: 普通问答、概念解释、简单计算、闲聊
+        {"intent":"text|image|voice","content":"原始问题原文","deep":true|false}
+
+        【content 规则】
+        - content 必须是用户输入的原始文字，不要修改、不要计算、不要推理
+
+        【intent 规则】
+        - 画图/生成图片→image，朗读/语音→voice，其他→text
+
+        【deep 规则】
+        - deep=true: 需要多步分析才能回答的复杂问题。
+          如: 需要查阅资料后分步解答、多角度综合分析的提问。
+          判断标准: 能否一句话回答? 不能→true
+        - deep=false: 简单问答、概念解释、计算、闲聊等可直接回答的问题。
+          绝大多数日常提问为deep=false
         """;
 
     public IntentResult recognize(String query) {

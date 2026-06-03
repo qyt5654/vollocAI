@@ -18,6 +18,7 @@ public class DocumentService {
 
     private static final String COL = "knowledge_base";
     private static final int TOP_K = 3;
+    private static final double MIN_SCORE = 0.75;
 
     @Autowired(required = false) private MilvusServiceClient milvus;
     @Resource private VectorStore vectorStore;
@@ -32,13 +33,16 @@ public class DocumentService {
     public List<String> search(String query) {
         if (milvus != null) return milvusSearch(query);
         if (vectorStore.size() == 0) return List.of(FALLBACK);
-        return vectorStore.search(query, TOP_K);
+        return vectorStore.search(query, TOP_K, MIN_SCORE);
     }
 
     public String searchAndFormat(String query) {
         List<String> chunks = new ArrayList<>(search(query));
-        if (chunks.isEmpty()) chunks.add(FALLBACK);
-        var sb = new StringBuilder();
+        if (chunks.isEmpty()) {
+            return "知识库未找到与问题相关资料（相似度均低于阈值" + MIN_SCORE + "）。请明确告知用户：当前知识库缺少相关信息，无法给出可靠答案，建议人工核实或补充资料。\n";
+        }
+        if (chunks.size() == 1 && chunks.get(0).equals(FALLBACK)) chunks.add(FALLBACK);
+        StringBuilder sb = new StringBuilder();
         for (int i = 0; i < chunks.size(); i++)
             sb.append("[").append(i + 1).append("] ").append(chunks.get(i)).append("\n");
         return sb.toString();
@@ -67,14 +71,20 @@ public class DocumentService {
 
     private List<String> milvusSearch(String query) {
         float[] q = vectorStore.embed(List.of(query)).get(0);
-        var r = milvus.search(SearchParam.newBuilder().withCollectionName(COL)
+        io.milvus.grpc.SearchResults data = milvus.search(SearchParam.newBuilder().withCollectionName(COL)
                 .withVectorFieldName("embedding").withVectors(List.of(toFloats(q)))
                 .withTopK(TOP_K).withMetricType(MetricType.IP).withParams("{\"nprobe\":16}")
                 .withOutFields(List.of("content")).build()).getData();
+        io.milvus.grpc.SearchResultData sr = data.getResults();
+        List<Float> scores = sr.getScoresList();
+        List<FieldData> fields = sr.getFieldsDataList();
         List<String> result = new ArrayList<>();
-        for (FieldData fd : r.getResults().getFieldsDataList())
+        for (int i = 0; i < fields.size() && i < scores.size(); i++) {
+            if (scores.get(i) < MIN_SCORE) continue;
+            FieldData fd = fields.get(i);
             if (fd.hasScalars() && fd.getScalars().hasStringData())
                 result.add(fd.getScalars().getStringData().getData(0));
+        }
         return result;
     }
 

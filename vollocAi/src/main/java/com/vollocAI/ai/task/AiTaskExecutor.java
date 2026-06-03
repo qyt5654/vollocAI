@@ -48,10 +48,10 @@ public class AiTaskExecutor {
     private void run(String taskId, String query, Long userId, Long modelId, String sessionId) {
         aiTaskService.updateStatus(taskId, AiTask.STATUS_PROCESSING);
         try {
-            var intent = intentRecognitionService.recognize(query);
+            IntentRecognitionService.IntentResult intent = intentRecognitionService.recognize(query);
             aiTaskService.update(task(taskId, intent.intent(), null, null));
             Cred cred = resolve(modelId, userId);
-            var history = loadHistory(sessionId);
+            List<Map<String, String>> history = loadHistory(sessionId);
             String q = intent.content();
 
             switch (intent.intent()) {
@@ -72,7 +72,9 @@ public class AiTaskExecutor {
                             .doOnNext(t -> {
                                 redis.opsForList().rightPush(streamKey, t);
                                 if (!UnifiedAgentService.isProtocolEvent(t)) sb.append(t);
-                            }).blockLast();
+                            })
+                            //阻塞线程
+                            .blockLast();
                     finish(taskId, sessionId, userId, query, sb.toString());
                 }
             }
@@ -88,13 +90,33 @@ public class AiTaskExecutor {
         for (int i = 0; i < text.length(); i++) redis.opsForList().rightPush(k, String.valueOf(text.charAt(i)));
     }
 
+    /**
+     * 对话结束进行redis+DB双写
+     * @param taskId
+     * @param sessionId
+     * @param userId
+     * @param query
+     * @param answer
+     */
     private void finish(String taskId, String sessionId, Long userId, String query, String answer) {
-        saveHistory(sessionId, query, answer);
+        // 清理可能混入的协议标记和JSON决策残片，防止污染对话历史
+        String clean = answer
+                .replaceAll("\\[\\[(ACT|OBS|STATE|PLAN)]][^\n]*\n?", "")
+                .replaceAll("\\{\"type\":\"(final|tool)\"[^}]*}", "")
+                .replaceAll("JSON无效[^\n]*\n?", "")
+                .trim();
+        String finalAnswer = clean.isEmpty() ? answer : clean;
+        saveHistory(sessionId, query, finalAnswer);
         saveSession(sessionId, userId, query);
-        redis.opsForValue().set("ai:result:" + taskId, answer, 10, TimeUnit.MINUTES);
-        aiTaskService.update(task(taskId, null, answer, AiTask.STATUS_COMPLETED));
+        redis.opsForValue().set("ai:result:" + taskId, finalAnswer, 10, TimeUnit.MINUTES);
+        aiTaskService.update(task(taskId, null, finalAnswer, AiTask.STATUS_COMPLETED));
     }
 
+    /**
+     * 任务失败
+     * @param taskId
+     * @param msg
+     */
     private void fail(String taskId, String msg) {
         redis.opsForList().rightPush("stream:" + taskId + ":q", "ERROR:" + msg);
         redis.opsForValue().set("ai:result:" + taskId, msg, 10, TimeUnit.MINUTES);
@@ -102,6 +124,13 @@ public class AiTaskExecutor {
     }
 
     record Cred(String key, String url, String model) {}
+
+    /**
+     * 查询模型
+     * @param modelId
+     * @param userId
+     * @return
+     */
     private Cred resolve(Long modelId, Long userId) {
         DatabaseAi cfg = modelId != null && modelId != 0 ? databaseAiService.queryById(modelId) : null;
         if (cfg == null) {
@@ -165,7 +194,7 @@ public class AiTaskExecutor {
 
     private static Map<String,String> parseItem(String s) {
         if (s == null || s.isBlank()) return null;
-        try { var o = com.alibaba.fastjson.JSON.parseObject(s); String r = o.getString("role"), c = o.getString("content"); return r!=null&&c!=null?Map.of("role",r,"content",c):null; }
+        try { com.alibaba.fastjson.JSONObject o = com.alibaba.fastjson.JSON.parseObject(s); String r = o.getString("role"), c = o.getString("content"); return r!=null&&c!=null?Map.of("role",r,"content",c):null; }
         catch (Exception e) { return null; }
     }
 

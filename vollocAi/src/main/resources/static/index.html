@@ -16,27 +16,18 @@
         :root {
             --sidebar-w: 260px;
             --chat-max: 780px;
-            --c-bg: #f4f5f7;
-            --c-surface: #ffffff;
-            --c-sidebar: #12141a;
-            --c-sidebar-elevated: #1c1f27;
-            --c-sidebar-text: #9ca3af;
-            --c-sidebar-hover: #252a35;
-            --c-border: #e5e7eb;
-            --c-text: #111827;
-            --c-muted: #6b7280;
-            --c-accent: #6366f1;
-            --c-accent-hover: #4f46e5;
-            --c-accent-soft: #eef2ff;
+            --c-bg: #0a0a0f; --c-surface: #141419; --c-elevated: #1c1c24;
+            --c-sidebar: #0d0d14; --c-sidebar-hover: #18181f;
+            --c-sidebar-text: #7a7a85;
+            --c-border: rgba(128,128,160,.12);
+            --c-text: #e2e2e8; --c-muted: #9ca3af;
+            --c-accent: #6366f1; --c-accent-hover: #818cf8; --c-accent-soft: rgba(99,102,241,.08);
             --c-user-bg: #6366f1;
             --c-user-text: #fff;
             --c-danger: #ef4444;
-            --c-danger-soft: #fef2f2;
-            --c-success: #10b981;
-            --radius: 10px;
-            --radius-lg: 16px;
-            --shadow-sm: 0 1px 2px rgba(0,0,0,.05);
-            --shadow-md: 0 4px 24px rgba(0,0,0,.08);
+            --c-danger-soft: rgba(239,68,68,.08); --c-success: #22c55e;
+            --radius: 16px; --radius-sm: 12px; --radius-lg: 18px;
+            --shadow-sm: 0 1px 3px rgba(0,0,0,.12); --shadow-md: 0 4px 20px rgba(0,0,0,.2);
             --font: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
             --mono: 'JetBrains Mono', 'SF Mono', monospace;
         }
@@ -48,8 +39,14 @@
             color: var(--c-text);
             font-size: 15px;
             line-height: 1.5;
-            -webkit-font-smoothing: antialiased;
+            -webkit-font-smoothing: antialiased; overflow: hidden;
         }
+        #particleCanvas { position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .6; }
+        #app { position: relative; z-index: 2; }
+        ::selection { background: rgba(99,102,241,.3); }
+        .bg-orb { position: fixed; border-radius: 50%; filter: blur(140px); opacity: .025; pointer-events: none; z-index: 0; }
+        .bg-orb.o1 { width: 500px; height: 500px; background: var(--c-accent); top: -150px; left: -150px; }
+        .bg-orb.o2 { width: 400px; height: 400px; background: #8b5cf6; bottom: -100px; right: -100px; }
         button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
             outline: 2px solid var(--c-accent);
             outline-offset: 2px;
@@ -201,7 +198,7 @@
         .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--c-bg); }
         .chat-header {
             flex-shrink: 0; padding: 14px 24px;
-            background: rgba(255,255,255,.85); backdrop-filter: blur(12px);
+            background: rgba(10,10,15,.75); backdrop-filter: blur(12px);
             border-bottom: 1px solid var(--c-border);
             display: flex; align-items: center; justify-content: space-between;
         }
@@ -286,10 +283,10 @@
         .react-head {
             display: flex; justify-content: space-between; align-items: center;
             padding: 10px 14px; font-size: 13px; font-weight: 600;
-            cursor: pointer; background: #fafafa; color: var(--c-text);
+            cursor: pointer; background: rgba(255,255,255,.03); color: var(--c-text);
             user-select: none; transition: background .12s;
         }
-        .react-head:hover { background: #f3f4f6; }
+        .react-head:hover { background: rgba(255,255,255,.06); }
         .react-head .count {
             font-size: 11px; font-weight: 600; color: var(--c-accent);
             background: var(--c-accent-soft); padding: 2px 8px; border-radius: 10px;
@@ -310,14 +307,14 @@
             display: flex; gap: 10px; align-items: flex-start;
             padding: 8px 6px; border-radius: 8px; font-size: 12px; line-height: 1.5;
         }
-        .react-item + .react-item { border-top: 1px solid #f3f4f6; }
+        .react-item + .react-item { border-top: 1px solid var(--c-border); }
         .react-badge {
             flex-shrink: 0; font-family: var(--mono); font-size: 10px; font-weight: 600;
             padding: 3px 6px; border-radius: 4px; letter-spacing: .03em;
         }
-        .react-item.act .react-badge { background: #eef2ff; color: #4f46e5; }
-        .react-item.obs .react-badge { background: #ecfdf5; color: #059669; }
-        .react-item.state .react-badge { background: #f3f4f6; color: #6b7280; }
+        .react-item.act .react-badge { background: rgba(99,102,241,.15); color: #818cf8; }
+        .react-item.obs .react-badge { background: rgba(34,197,94,.1); color: #34d399; }
+        .react-item.state .react-badge { background: rgba(255,255,255,.05); color: var(--c-muted); }
         .react-item.err .react-badge { background: var(--c-danger-soft); color: var(--c-danger); }
         .react-text { color: var(--c-text); word-break: break-word; font-family: var(--mono); font-size: 11px; }
 
@@ -344,7 +341,7 @@
         .input-inner textarea {
             flex: 1; padding: 10px 8px; border: none; outline: none; resize: none;
             font-size: 15px; font-family: inherit; line-height: 1.5;
-            min-height: 24px; max-height: 160px; background: transparent;
+            min-height: 24px; max-height: 160px; background: transparent; color: var(--c-text);
         }
         .input-inner textarea::placeholder { color: #9ca3af; }
         .btn-send {
@@ -430,6 +427,14 @@
         .md h1 { font-size: 1.25em; } .md h2 { font-size: 1.1em; }
         .md blockquote { border-left: 3px solid var(--c-accent); padding-left: 14px; color: var(--c-muted); margin: 10px 0; }
         .md a { color: var(--c-accent); }
+        .search-sources { margin-top: 12px; width: 100%; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-sm); overflow: hidden; }
+        .search-sources-head { padding: 8px 14px; font-size: 11px; font-weight: 500; color: var(--c-muted); border-bottom: 1px solid var(--c-border); }
+        .search-item { display: flex; flex-direction: column; padding: 10px 14px; text-decoration: none; color: var(--c-text); border-bottom: 1px solid var(--c-border); transition: background .15s; }
+        .search-item:last-child { border-bottom: none; }
+        .search-item:hover { background: var(--c-elevated); }
+        .search-title { font-size: 13px; font-weight: 500; color: var(--c-accent); margin-bottom: 2px; }
+        .search-url { font-size: 11px; color: var(--c-muted); margin-bottom: 4px; word-break: break-all; }
+        .search-snippet { font-size: 12px; color: var(--c-muted); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
         .md table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 14px; }
         .md th, .md td { border: 1px solid var(--c-border); padding: 8px 12px; }
         .md th { background: #f9fafb; }
@@ -459,6 +464,7 @@
     </style>
 </head>
 <body>
+<canvas id="particleCanvas" aria-hidden="true"></canvas>
 <div id="app">
     <div v-if="!user" class="auth-wrap">
         <div class="auth-box">
@@ -539,6 +545,7 @@
                                         </div>
                                     </div>
                                 </div>
+                                <!-- 搜索来源 --><div v-if="m.role==='assistant' && m.searchResults && m.searchResults.length" class="search-sources"><div class="search-sources-head">搜索来源 ({{ m.searchResults.length }}条)</div><a v-for="(r,ri) in m.searchResults" :key="ri" :href="r.url" target="_blank" class="search-item"><span class="search-title">{{ r.title }}</span><span class="search-url">{{ r.url }}</span><span class="search-snippet">{{ r.snippet }}</span></a></div>
                                 <img v-if="m.image" :src="m.image" alt="生成图片">
                                 <audio v-if="m.audio" controls :src="m.audio"></audio>
                                 <div v-if="m.time" class="stamp">{{ m.time }}</div>
@@ -771,7 +778,7 @@ createApp({
             const patch = (extra = {}) => {
                 const prev = messages.value[placeholderIdx] || {};
                 messages.value[placeholderIdx] = {
-                    role: 'assistant', text: fullText || prev.text, image: null, audio: null,
+                    role: 'assistant', text: fullText || prev.text, image: null, audio: null, searchResults: extra.searchResults || prev.searchResults || null,
                     time: new Date().toLocaleTimeString(),
                     steps: [...steps], reactOpen: prev.reactOpen ?? steps.length > 0,
                     reactStatus: reactStatus || (planBuf ? '调度输出中…' : ''),
@@ -786,12 +793,17 @@ createApp({
                 const es = new EventSource(BASE + '/ai/stream/' + taskId + '?satoken=' + token.value);
                 es.onmessage = (e) => {
                     if (closed) return;
-                    if (e.data === '[DONE]') { es.close(); closed = true; done(); loadSessions(); return; }
-                    if (e.data.startsWith('ERROR:')) { es.close(); closed = true; patch({ text: e.data }); done(); return; }
-                    const step = parseStep(e.data);
-                    if (step) { steps.push(step); patch({ reactOpen: true, text: fullText || '...' }); return; }
-                    if (e.data.startsWith('[[PLAN]]')) { patch({ reactOpen: true, text: fullText || '...' }); return; }
-                    fullText += e.data;
+                    if (!e.data) return;
+                    const ch = e.data === '<NL>' ? '\n' : e.data;
+                    if (ch === '[DONE]') { es.close(); closed = true; fullText = cleanJsonText(fullText); patch(); done(); loadSessions();
+                        const isImage = /^https?:\/\/.+\.(png|jpg|jpeg|gif|webp)(\?.*)?$/.test(fullText) || fullText.startsWith('https://dashscope.aliyuncs.com/'); const isAudio = fullText.startsWith('/Users/') && fullText.endsWith('.mp3');
+                        const msg = messages.value[placeholderIdx]; if (msg) { msg.image = isImage ? fullText : null; msg.audio = isAudio ? fullText : null; if (isImage || isAudio) msg.text = ''; }
+                        return; }
+                    if (ch.startsWith('ERROR:')) { es.close(); closed = true; patch({ text: ch }); done(); return; }
+                    const step = parseStep(ch);
+                    if (step) { steps.push(step); const extra = step.type === 'search' ? { searchResults: step.results } : {}; patch({ reactOpen: true, text: fullText || '...', ...extra }); return; }
+                    if (ch.startsWith('[[PLAN]]')) { patch({ reactOpen: true, text: fullText || '...', ...extra }); return; }
+                    fullText += ch;
                     patch({ text: fullText });
                 };
                 es.onerror = () => {
@@ -881,11 +893,14 @@ createApp({
             loadSessions();
         };
 
+        const cleanJsonText = (text) => { if (!text || typeof text !== "string") return text; const s = text.trim(); if (s.startsWith("{") && s.includes("\"type\"") && s.includes("\"final\"")) { try { const o = JSON.parse(s); if (o.output) return o.output; if (o.text) return o.text; return ""; } catch (e) {} } return text; };
+
         const renderMd = (text) => {
-            if (!text || text === '...') return '';
+            let t = text;
+            if (!t || t === '...') return '';
             try {
                 const mathBlocks = [];
-                let protected_ = text
+                let protected_ = t
                     .replace(/\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]/g, (m, d1, d2) => {
                         mathBlocks.push({ display: true, tex: (d1 || d2).trim() });
                         return `\n[MATH${mathBlocks.length - 1}]\n`;
@@ -899,14 +914,15 @@ createApp({
                         mathBlocks.push({ display: false, tex: m.trim() });
                         return `[MATH${mathBlocks.length - 1}]`;
                     });
-                let html = marked.parse(protected_);
+                let html = (typeof marked !== "undefined" && marked.parse) ? marked.parse(protected_, { breaks: true }) : protected_.replace(/\n/g, "<br>");
+                html = html.replace(/<p>(#{1,6})\s+(.+?)<\/p>/g, (_, h, txt) => "<h" + h.length + ">" + txt + "</h" + h.length + ">");
                 html = html.replace(/\[MATH(\d+)\]/g, (_, i) => {
                     const b = mathBlocks[parseInt(i)];
                     try { return katex.renderToString(b.tex, { displayMode: b.display, throwOnError: false }); }
                     catch (e) { return b.tex; }
                 });
                 return html;
-            } catch (e) { return text; }
+            } catch (e) { return t; }
         };
 
         const showModels = ref(false);
@@ -1016,11 +1032,60 @@ createApp({
             sessions, send, newSession, openSession, delSession, toast,
             showModels, showAssign, allModels, allUsers, assignedSet, form, editingId,
             openModels, openAssign, editModel, addModel, updateModel, delModel,
-            toggleAssign, modelsOfUser, modelsNotOfUser, renderMd,
+            toggleAssign, modelsOfUser, modelsNotOfUser, renderMd, cleanJsonText,
             suggestions, useSuggestion, onInputKeydown, currentModelName, reactBadge
         };
     }
 }).mount('#app');
 </script>
+
+<script>
+(function() {
+    const canvas = document.getElementById('particleCanvas');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const mobile = window.innerWidth < 768;
+    const COUNT = mobile ? 20 : reduced ? 10 : 35;
+    let nodes = [], mouse = { x: -999, y: -999 };
+
+    function resize() { canvas.width = window.innerWidth; canvas.height = window.innerHeight; }
+    window.addEventListener('resize', resize); resize();
+    document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+
+    class Node {
+        constructor() {
+            this.x = Math.random() * canvas.width; this.y = Math.random() * canvas.height;
+            this.vx = (Math.random() - .5) * .15; this.vy = (Math.random() - .5) * .15;
+            this.r = .6 + Math.random() * 1.2;
+        }
+        update() {
+            const dx = mouse.x - this.x, dy = mouse.y - this.y, dist = Math.hypot(dx, dy) || 1;
+            if (dist < 180) { this.vx += (dx / dist) * .008; this.vy += (dy / dist) * .008; }
+            this.vx *= .997; this.vy *= .997;
+            this.x += this.vx; this.y += this.vy;
+            if (this.x < -50) this.x = canvas.width + 50; if (this.x > canvas.width + 50) this.x = -50;
+            if (this.y < -50) this.y = canvas.height + 50; if (this.y > canvas.height + 50) this.y = -50;
+        }
+    }
+    for (let i = 0; i < COUNT; i++) nodes.push(new Node());
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        for (const n of nodes) n.update();
+        for (let i = 0; i < nodes.length; i++) {
+            for (let j = i + 1; j < nodes.length; j++) {
+                const a = nodes[i], b = nodes[j], dist = Math.hypot(a.x - b.x, a.y - b.y);
+                if (dist < 160) { ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.strokeStyle = 'rgba(140,140,180,' + ((1 - dist / 160) * .06) + ')'; ctx.lineWidth = .3; ctx.stroke(); }
+            }
+        }
+        for (const n of nodes) { ctx.beginPath(); ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2); ctx.fillStyle = 'rgba(160,160,200,.25)'; ctx.fill(); }
+        if (mouse.x > 0) { const g = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 200); g.addColorStop(0, 'rgba(140,140,200,.03)'); g.addColorStop(1, 'transparent'); ctx.beginPath(); ctx.arc(mouse.x, mouse.y, 200, 0, Math.PI * 2); ctx.fillStyle = g; ctx.fill(); }
+        if (!reduced) requestAnimationFrame(draw);
+    }
+    if (!reduced) requestAnimationFrame(draw);
+})();
+</script>
+<div class="bg-orb o1"></div><div class="bg-orb o2"></div>
 </body>
 </html>

@@ -72,36 +72,58 @@ public class AiClientController {
 
     // ==================== SSE 流式 ====================
 
-    /** 流式推送 —— Redis List 做队列，BLPOP 逐 token 阻塞获取 */
+    /**
+     * SSE 流式推送 —— 从 Redis List BLPOP 逐 token 消费，推送到前端。
+     *
+     * <h3>数据流</h3>
+     * <pre>
+     *   AgentExecutor.push() → FluxSink → AiTaskExecutor.doOnNext
+     *     → redis.rightPush("stream:{taskId}:q", char)
+     *       → 本方法 BLPOP 消费 → emitter.send(data:char) → 前端 EventSource
+     * </pre>
+     *
+     * <h3>心跳策略</h3>
+     * 用空 {@code data:} 事件而非 {@code comment}，浏览器EventSource只认data事件为keepalive。
+     * BLPOP超时1秒无token时发心跳 + 检测失败/完成状态。
+     *
+     * <h3>\n 编码</h3>
+     * 独立 {@code \n} token在SSE协议中被当作行分隔符吃掉，导致marked.js无法识别Markdown标题。
+     * 编码为 {@code <NL>} 传输，前端解码回 {@code \n}。
+     *
+     * @param taskId 任务ID
+     * @return SseEmitter（180秒超时）
+     */
     @GetMapping(value = "/stream/{taskId}", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter streamResult(@PathVariable String taskId) {
         SseEmitter emitter = new SseEmitter(180_000L);
         aiThreadPool.execute(() -> {
             try {
                 String qKey = "stream:" + taskId + ":q";
-                // 等第一个 token（最多 15 秒）
-                for (int i = 0; i < 30 && stringRedisTemplate.opsForList().size(qKey) == 0; i++) {
-                    AiTask t = aiTaskService.queryByTaskId(taskId);
-                    if (t != null && AiTask.STATUS_FAILED.equals(t.getStatus())) {
-                        String msg = StringUtils.isNotEmpty(t.getResult()) ? t.getResult() : "任务执行失败";
-                        emitter.send(SseEmitter.event().data("ERROR:" + msg));
-                        emitter.complete(); return;
-                    }
-                    try { Thread.sleep(500); } catch (InterruptedException e) { break; }
-                }
-                // BLPOP 逐 token 取，每取到一个立即推送
                 while (true) {
-                    String token = stringRedisTemplate.opsForList().leftPop(qKey, 3, TimeUnit.SECONDS);
+                    // BLPOP: 有数据立即返回，无数据阻塞1秒后返回null
+                    String token = stringRedisTemplate.opsForList().leftPop(qKey, 1, TimeUnit.SECONDS);
                     if (token == null) {
-                        emitter.send(SseEmitter.event().comment("")); // heartbeat 强制刷缓冲
+                        // 检测任务是否已失败
+                        AiTask t = aiTaskService.queryByTaskId(taskId);
+                        if (t != null && AiTask.STATUS_FAILED.equals(t.getStatus())) {
+                            String msg = StringUtils.isNotEmpty(t.getResult()) ? t.getResult() : "任务执行失败";
+                            emitter.send(SseEmitter.event().data("ERROR:" + msg));
+                            emitter.complete();
+                            return;
+                        }
+                        // 发心跳保活（空data事件，浏览器认作keepalive）
+                        emitter.send(SseEmitter.event().data(""));
+                        // ai:result:{taskId} 由AiTaskExecutor.finish()写入，标志任务结束
                         if (stringRedisTemplate.opsForValue().get("ai:result:" + taskId) != null) break;
                         continue;
                     }
-                    emitter.send(SseEmitter.event().data(token));
+                    emitter.send(SseEmitter.event().data("\n".equals(token) ? "<NL>" : token));
                 }
                 emitter.send(SseEmitter.event().data("[DONE]"));
                 emitter.complete();
-            } catch (Exception e) { emitter.completeWithError(e); }
+            } catch (Exception e) {
+                emitter.completeWithError(e);
+            }
         });
         return emitter;
     }

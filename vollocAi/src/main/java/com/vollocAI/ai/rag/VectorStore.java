@@ -36,16 +36,25 @@ public class VectorStore {
         return chunks.size();
     }
 
+    static final double MIN_SCORE = 0.75;
+
     public List<String> search(String query, int topK) {
+        return search(query, topK, MIN_SCORE);
+    }
+
+    public List<String> search(String query, int topK, double minScore) {
         float[] q = embed(List.of(query)).get(0);
-        var pq = new PriorityQueue<Hit>(Comparator.comparingDouble(h -> -h.score));
+        PriorityQueue<Hit> pq = new PriorityQueue<>(Comparator.comparingDouble(h -> -h.score));
         for (Entry e : store) {
             double sim = cosine(q, e.embedding);
             if (pq.size() < topK) pq.offer(new Hit(e.content, sim));
             else if (sim > pq.peek().score) { pq.poll(); pq.offer(new Hit(e.content, sim)); }
         }
         List<String> result = new ArrayList<>();
-        while (!pq.isEmpty()) result.add(pq.poll().content);
+        while (!pq.isEmpty()) {
+            Hit h = pq.poll();
+            if (h.score >= minScore) result.add(h.content);
+        }
         Collections.reverse(result);
         return result;
     }
@@ -54,7 +63,11 @@ public class VectorStore {
 
     private double cosine(float[] a, float[] b) {
         double dot = 0, na = 0, nb = 0;
-        for (int i = 0; i < a.length; i++) { dot += a[i] * b[i]; na += a[i] * a[i]; nb += b[i] * b[i]; }
+        for (int i = 0; i < a.length; i++) {
+            dot += a[i] * b[i];
+            na += a[i] * a[i];
+            nb += b[i] * b[i];
+        }
         return dot / (Math.sqrt(na) * Math.sqrt(nb));
     }
 

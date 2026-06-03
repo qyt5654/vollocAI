@@ -17,72 +17,123 @@ import com.vollocAI.ai.llm.AiUtils;
 import java.util.*;
 import java.util.stream.Collectors;
 
-/** 统一 Agent */
+/**
+ * Agent 服务 —— 入口层，按意图分发 SIMPLE / DEEP 模式。
+ *
+ * <h3>模式</h3>
+ * SIMPLE: 日常问答，LLM 逐轮 JSON 决策，只暴露基础工具（计算器、时间）
+ * DEEP:  复杂调查，Supervisor 制定计划 → 多步执行 → Replanner 反思 → RAG + 工具协作
+ */
 @Service
 public class UnifiedAgentService {
 
     private static final Logger log = LoggerFactory.getLogger(UnifiedAgentService.class);
-    public static final String A = ReactProtocol.ACT, O = ReactProtocol.OBS, S = ReactProtocol.STATE, P = ReactProtocol.PLAN;
+
+    public static final String A = ReactProtocol.ACT, O = ReactProtocol.OBS,
+                               S = ReactProtocol.STATE, P = ReactProtocol.PLAN;
 
     @Resource private ToolRegistry tools;
     @Resource private ToolCaller caller;
-    @Value("${volloc.agent.max-calls:6}") private int maxCalls;
-    @Value("${volloc.agent.max-steps:10}") private int maxSteps;
+    @Value("${volloc.agent.max-calls:6}")    private int maxCalls;
+    @Value("${volloc.agent.max-steps:10}")   private int maxSteps;
     @Value("${volloc.agent.tool-timeout:30000}") private long toolTimeout;
+    @Value("${volloc.agent.deep.finish-strategy:atLeastHalf}") private String finishStrategy;
 
-    public static boolean isProtocolEvent(String t) { return ReactProtocol.isEvent(t); }
+    // ======================== Prompts ========================
 
-    public Flux<String> execute(boolean deep, String query, String apiKey, String apiUrl, String model,
+    /** SIMPLE 回答风格 */
+    static final String ANSWER = "你是智能助手，用自然语言直接回答用户问题。回答要准确、全面、有深度，给出具体可操作的细节。不确定就说不知道。";
+
+    /** DEEP 规划者：分析问题，制定分步解决计划 */
+    static final String SUPER_PROMPT = "你是智能助手，分析用户问题并制定分步解决计划。"
+            + "严格返回JSON：{\"rationale\":\"一句话分析\",\"steps\":[\"步骤1\",\"步骤2\"]}";
+
+    /** DEEP 执行者：基于检索结果完成当前步骤，严禁编造 */
+    static final String EXEC_PROMPT = "基于检索到的资料完成当前步骤。"
+            + "只引用资料中已存在的内容, 严禁编造。无相关资料直接说: 本步未找到相关信息。150字内。";
+
+    /** DEEP 反思者：评估进展，优先 CONTINUE 完成全部步骤 */
+    static final String REPLAN_PROMPT = "评估进展。优先继续执行剩余步骤，只有在已有充足信息完全回答用户问题时才返回FINISH。"
+            + "通常情况返回CONTINUE。返回JSON：{\"decision\":\"CONTINUE|ADJUST|FINISH\","
+            + "\"adjusted_step\":\"仅ADJUST时填写\",\"reason\":\"一句话原因\"}";
+
+    // ======================== 入口 ========================
+
+    public static boolean isProtocolEvent(String t) {
+        return ReactProtocol.isEvent(t);
+    }
+
+    public Flux<String> execute(boolean deep, String query, String apiKey,
+                                 String apiUrl, String model,
                                  List<Map<String, String>> history) {
         return Flux.create(s -> {
-            if (deep) runDeep(query, apiKey, apiUrl, model, history, s);
-            else runSimple(query, apiKey, apiUrl, model, history, s);
+            if (deep) {
+                // ======================== DEEP ========================
+                AgentContext ctx = new AgentContext(AiUtils.toMessages(history));
+                ctx.cancelled.set(false);
+                try {
+                    ChatModel md = AiUtils.model(apiKey, apiUrl, model, 120);
+
+                    // ① Supervisor 制定调查计划
+                    ArrayList<Message> msgs = new ArrayList<>();
+                    msgs.add(new SystemMessage(SUPER_PROMPT));
+                    msgs.addAll(AiUtils.toMessages(history));
+                    msgs.add(new UserMessage(query));
+                    String planRaw = AgentExecutor.call(md, new Prompt(msgs));
+                    JSONObject plan = planRaw.isEmpty() ? null : AgentExecutor.parseJson(planRaw);
+                    if (plan == null) plan = fallback(query);
+
+                    List<String> steps = steps(plan);
+                    AgentExecutor exec = new AgentExecutor(tools, caller, toolTimeout, finishStrategy);
+                    exec.run(md, ctx, s, exec.DEEP, query, new ArrayList<>(), steps);
+                } catch (Exception e) {
+                    log.error("[DEEP] failed", e);
+                    if (!s.isCancelled()) s.error(e);
+                }
+            }
+            else {
+                // ======================== SIMPLE ========================
+                AgentContext ctx = new AgentContext(simplePlanMessages(history, query));
+                AgentExecutor exec = new AgentExecutor(tools, caller, toolTimeout, finishStrategy);
+                exec.run(AiUtils.model(apiKey, apiUrl, model), ctx, s, exec.SIMPLE, null, null, null);
+            }
         });
     }
 
-    private void runSimple(String query, String apiKey, String apiUrl, String model,
-                            List<Map<String, String>> history, FluxSink<String> s) {
-        var ctx = new AgentContext(simplePlanMessages(history, query));
-        var exec = new AgentExecutor(tools, caller, maxCalls, maxSteps, toolTimeout);
-        exec.run(AiUtils.model(apiKey, apiUrl, model), ctx, s, exec.SIMPLE, null, null, null);
-    }
-
-    private void runDeep(String query, String apiKey, String apiUrl, String model,
-                          List<Map<String, String>> past, FluxSink<String> s) {
-        var ctx = new AgentContext(List.of());
-        ctx.cancelled.set(false);
-        s.onCancel(ctx::cancel);
-        try {
-            ChatModel md = AiUtils.model(apiKey, apiUrl, model, 120);
-            AgentExecutor.push(s, "# 任务分析报告\n\n**请求**: "+query+"\n\n", ctx);
-            var msgs = new ArrayList<Message>(); msgs.add(new SystemMessage(SUPER_PROMPT)); msgs.addAll(AiUtils.toMessages(past)); msgs.add(new UserMessage(query));
-            JSONObject plan = AgentExecutor.parseJson(md.call(new Prompt(msgs)).getResult().getOutput().getContent());
-            if (plan == null) plan = fallback(query);
-            String tt = plan.getString("task_type"); if (tt == null) tt = "综合分析";
-            String rv = plan.getString("rationale"); if (rv == null) rv = query;
-            AgentExecutor.push(s, "## 任务类型\n"+tt+"\n\n## 计划\n"+rv+"\n\n", ctx);
-            List<String> steps = steps(plan);
-            List<String> findings = new ArrayList<>();
-            var exec = new AgentExecutor(tools, caller, maxCalls, maxSteps, toolTimeout);
-            exec.run(md, ctx, s, exec.DEEP, query, findings, steps);
-        } catch (Exception e) { log.error("[DEEP] failed", e); if (!s.isCancelled()) s.error(e); }
-    }
-
+    /**
+     * SIMPLE 只暴露基础工具（计算器、时间），不暴露 RAG 和 deep_research。
+     */
     private List<Message> simplePlanMessages(List<Map<String, String>> hist, String query) {
+        // SIMPLE 排除 RAG 和深度调查工具，其余（含 MCP 工具）全部可见
+        Set<String> excludeTools = Set.of("queryInternalDocs", "deep_research");
         String tl = tools.getToolDescriptions().entrySet().stream()
-                .map(e -> "- " + e.getKey() + ": " + e.getValue()).collect(Collectors.joining("\n"));
-        var p = new ArrayList<Message>();
-        p.add(new SystemMessage("工具调度器，只输出JSON。\n可用工具：\n"+tl+"\n能直接回答→{\"type\":\"final\"}；需工具→{\"type\":\"tool\",\"name\":\"x\",\"input\":\"y\"}"));
-        p.addAll(AiUtils.toMessages(hist)); p.add(new UserMessage(query));
+                .filter(e -> !excludeTools.contains(e.getKey()))
+                .map(e -> "- " + e.getKey() + ": " + e.getValue())
+                .collect(Collectors.joining("\n"));
+        ArrayList<Message> p = new ArrayList<>();
+        p.add(new SystemMessage(
+                "工具调度器，只输出JSON。\n可用工具：\n" + tl
+                + "\n能直接回答→{\"type\":\"final\"}；需工具→{\"type\":\"tool\",\"name\":\"x\",\"input\":\"y\"}"));
+        p.addAll(AiUtils.toMessages(hist));
+        p.add(new UserMessage(query));
         p.add(new SystemMessage(ANSWER));
         return p;
     }
 
-    private static JSONObject fallback(String q) { JSONObject o=new JSONObject(); o.put("task_type","综合分析"); o.put("rationale",q); o.put("steps",new JSONArray(List.of("收集证据","分析根因给建议"))); return o; }
-    private static List<String> steps(JSONObject p) { var a=p.getJSONArray("steps"); if(a==null||a.isEmpty())return List.of(Objects.toString(p.getString("rationale"),"分析请求")); List<String> s=new ArrayList<>(); for(Object o:a)s.add(o.toString()); return s; }
+    private static JSONObject fallback(String q) {
+        JSONObject o = new JSONObject();
+        o.put("task_type", "综合分析");
+        o.put("rationale", q);
+        o.put("steps", new JSONArray(List.of("收集证据", "分析根因给建议")));
+        return o;
+    }
 
-    static final String ANSWER = "工程向助手。紧扣问题，要点回答；不确定说明不确定；不客套。";
-    static final String SUPER_PROMPT = "你是Supervisor，分析请求制定计划。严格返回JSON：{\"task_type\":\"告警分析|日志排查|根因定位|日常问答\",\"rationale\":\"一句话\",\"steps\":[\"步骤1\",\"步骤2\"]}";
-    static final String EXEC_PROMPT = "你是Executor，根据证据完成调查步骤。引用证据中具体数据；无证据说明缺口。300字内。";
-    static final String REPLAN_PROMPT = "你是Replanner，评估进展。返回JSON：{\"decision\":\"CONTINUE|ADJUST|FINISH\",\"adjusted_step\":\"仅ADJUST时\",\"reason\":\"一句话\"}";
+    private static List<String> steps(JSONObject p) {
+        JSONArray a = p.getJSONArray("steps");
+        if (a == null || a.isEmpty())
+            return List.of(Objects.toString(p.getString("rationale"), "分析请求"));
+        List<String> s = new ArrayList<>();
+        for (Object o : a) s.add(o.toString());
+        return s;
+    }
 }

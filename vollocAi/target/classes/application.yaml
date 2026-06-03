@@ -54,8 +54,23 @@ milvus:
 server:
   port: 8001
 
-# 显式 ReAct Agent（非 Function Calling）
+# Agent 配置
+# 博查联网搜索（免费注册: https://open.bochaai.com 每天100次）
+bocha:
+  api-key: sk-3fb851e8c7ab42eb8afb0dee47edcf76
+
+# 外部 MCP Server（逗号分隔: name:command）自动发现工具
+mcp:
+  servers: text:python3 /Users/yipingchuan/IdeaProjects/aicode/vollocAI/mcp-text-server.py
+  # 多个示例: text:python3 /path/text-server.py, sms:python3 /path/sms-server.py
+
 volloc:
+  agent:
+    max-calls: 6
+    max-steps: 10
+    tool-timeout: 30000
+    deep:
+      finish-strategy: atLeastHalf   # atLeastHalf / atLeastTwo / noLimit / evidenceBased
   react:
     max-tool-calls: 6
     max-steps: 10

@@ -46,11 +46,11 @@ public final class AiUtils {
     public static ChatModel model(String apiKey, String apiUrl, String modelName, int readTimeoutSec) {
         String k = apiUrl + "|" + modelName;
         return MODEL_CACHE.computeIfAbsent(k, key -> {
-            var f = new SimpleClientHttpRequestFactory();
+            SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
             f.setConnectTimeout(java.time.Duration.ofSeconds(10));
             f.setReadTimeout(java.time.Duration.ofSeconds(readTimeoutSec));
-            var api = new OpenAiApi(apiUrl, apiKey, RestClient.builder().requestFactory(f), WebClient.builder());
-            var retry = RetryTemplate.builder().maxAttempts(2).exponentialBackoff(1000, 2, 5000)
+            OpenAiApi api = new OpenAiApi(apiUrl, apiKey, RestClient.builder().requestFactory(f), WebClient.builder());
+            RetryTemplate retry = RetryTemplate.builder().maxAttempts(2).exponentialBackoff(1000, 2, 5000)
                     .retryOn(java.io.IOException.class).build();
             return new OpenAiChatModel(api, OpenAiChatOptions.builder().withModel(modelName).build(),
                     new org.springframework.ai.model.function.DefaultFunctionCallbackResolver(), List.of(), retry);
