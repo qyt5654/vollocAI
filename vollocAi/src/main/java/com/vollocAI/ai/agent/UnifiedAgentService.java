@@ -14,6 +14,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 
 import com.vollocAI.ai.llm.AiUtils;
+import com.vollocAI.ai.llm.IntentRecognitionService;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -34,10 +35,7 @@ public class UnifiedAgentService {
 
     @Resource private ToolRegistry tools;
     @Resource private ToolCaller caller;
-    @Value("${volloc.agent.max-calls:6}")    private int maxCalls;
-    @Value("${volloc.agent.max-steps:10}")   private int maxSteps;
     @Value("${volloc.agent.tool-timeout:30000}") private long toolTimeout;
-    @Value("${volloc.agent.deep.finish-strategy:atLeastHalf}") private String finishStrategy;
 
     // ======================== Prompts ========================
 
@@ -52,10 +50,11 @@ public class UnifiedAgentService {
     static final String EXEC_PROMPT = "基于检索到的资料完成当前步骤。"
             + "只引用资料中已存在的内容, 严禁编造。无相关资料直接说: 本步未找到相关信息。150字内。";
 
-    /** DEEP 反思者：评估进展，优先 CONTINUE 完成全部步骤 */
-    static final String REPLAN_PROMPT = "评估进展。优先继续执行剩余步骤，只有在已有充足信息完全回答用户问题时才返回FINISH。"
-            + "通常情况返回CONTINUE。返回JSON：{\"decision\":\"CONTINUE|ADJUST|FINISH\","
-            + "\"adjusted_step\":\"仅ADJUST时填写\",\"reason\":\"一句话原因\"}";
+    /** DEEP 反思者：LLM 自判断是否结束，不做二次校验 */
+    static final String REPLAN_PROMPT = "评估进展。只有在已有充足信息完全回答用户问题时才返回FINISH。"
+            + "通常情况返回CONTINUE。不要过早结束。"
+            + "返回JSON：{\"decision\":\"CONTINUE|ADJUST|FINISH\","
+            + "\"adjusted_step\":\"仅ADJUST时填写\",\"reason\":\"...\"}";
 
     // ======================== 入口 ========================
 
@@ -79,12 +78,12 @@ public class UnifiedAgentService {
                     msgs.add(new SystemMessage(SUPER_PROMPT));
                     msgs.addAll(AiUtils.toMessages(history));
                     msgs.add(new UserMessage(query));
-                    String planRaw = AgentExecutor.call(md, new Prompt(msgs));
-                    JSONObject plan = planRaw.isEmpty() ? null : AgentExecutor.parseJson(planRaw);
+                    String planRaw = AiUtils.call(md, new Prompt(msgs));
+                    JSONObject plan = planRaw.isEmpty() ? null : AiUtils.parseJson(planRaw);
                     if (plan == null) plan = fallback(query);
 
                     List<String> steps = steps(plan);
-                    AgentExecutor exec = new AgentExecutor(tools, caller, toolTimeout, finishStrategy);
+                    AgentExecutor exec = new AgentExecutor(tools, caller, toolTimeout);
                     exec.run(md, ctx, s, exec.DEEP, query, new ArrayList<>(), steps);
                 } catch (Exception e) {
                     log.error("[DEEP] failed", e);
@@ -93,32 +92,26 @@ public class UnifiedAgentService {
             }
             else {
                 // ======================== SIMPLE ========================
-                AgentContext ctx = new AgentContext(simplePlanMessages(history, query));
-                AgentExecutor exec = new AgentExecutor(tools, caller, toolTimeout, finishStrategy);
-                exec.run(AiUtils.model(apiKey, apiUrl, model), ctx, s, exec.SIMPLE, null, null, null);
+                String tl = tools.getToolDescriptions(ToolMode.SIMPLE)
+                        .entrySet().stream()
+                        .map(e -> "- " + e.getKey() + ": " + e.getValue())
+                        .collect(Collectors.joining("\n"));
+                ArrayList<Message> p = new ArrayList<>();
+                p.add(new SystemMessage(
+                        "工具调度器，只输出JSON。\n可用工具：\n" + tl
+                                + "\n能直接回答→{\"type\":\"final\"}；需工具→{\"type\":\"tool\",\"name\":\"x\",\"input\":\"y\"}"));
+                p.addAll(AiUtils.toMessages(history));
+                p.add(new UserMessage(query));
+                p.add(new SystemMessage(ANSWER));
+                AgentContext ctx = new AgentContext(p);
+                AgentExecutor exec = new AgentExecutor(tools, caller, toolTimeout);
+                ChatModel md = AiUtils.model(apiKey, apiUrl, model);
+
+                exec.run(md, ctx, s, exec.SIMPLE, null, null, null);
             }
         });
     }
 
-    /**
-     * SIMPLE 只暴露基础工具（计算器、时间），不暴露 RAG 和 deep_research。
-     */
-    private List<Message> simplePlanMessages(List<Map<String, String>> hist, String query) {
-        // SIMPLE 排除 RAG 和深度调查工具，其余（含 MCP 工具）全部可见
-        Set<String> excludeTools = Set.of("queryInternalDocs", "deep_research");
-        String tl = tools.getToolDescriptions().entrySet().stream()
-                .filter(e -> !excludeTools.contains(e.getKey()))
-                .map(e -> "- " + e.getKey() + ": " + e.getValue())
-                .collect(Collectors.joining("\n"));
-        ArrayList<Message> p = new ArrayList<>();
-        p.add(new SystemMessage(
-                "工具调度器，只输出JSON。\n可用工具：\n" + tl
-                + "\n能直接回答→{\"type\":\"final\"}；需工具→{\"type\":\"tool\",\"name\":\"x\",\"input\":\"y\"}"));
-        p.addAll(AiUtils.toMessages(hist));
-        p.add(new UserMessage(query));
-        p.add(new SystemMessage(ANSWER));
-        return p;
-    }
 
     private static JSONObject fallback(String q) {
         JSONObject o = new JSONObject();

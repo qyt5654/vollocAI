@@ -1,12 +1,11 @@
 package com.vollocAI.ai.rag;
 
-import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
-import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingOptions;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -19,11 +18,16 @@ public class VectorStore {
     private static final Logger log = LoggerFactory.getLogger(VectorStore.class);
     private final List<Entry> store = new CopyOnWriteArrayList<>();
 
-    @Resource private EmbeddingModel embeddingModel;
+    @Autowired(required = false)
+    private EmbeddingModel embeddingModel;
 
     record Entry(String docId, float[] embedding, String content) {}
 
     public List<float[]> embed(List<String> texts) {
+        if (embeddingModel == null) {
+            log.warn("EmbeddingModel 未配置，跳过向量化");
+            return texts.stream().map(t -> new float[0]).toList();
+        }
         return embeddingModel.call(new EmbeddingRequest(texts, EmbeddingOptions.EMPTY))
                 .getResults().stream().map(r -> r.getOutput()).toList();
     }
@@ -34,12 +38,6 @@ public class VectorStore {
             store.add(new Entry(docId, embs.get(i), chunks.get(i)));
         log.info("向量入库 docId={} chunks={}", docId, chunks.size());
         return chunks.size();
-    }
-
-    static final double MIN_SCORE = 0.75;
-
-    public List<String> search(String query, int topK) {
-        return search(query, topK, MIN_SCORE);
     }
 
     public List<String> search(String query, int topK, double minScore) {
@@ -61,6 +59,7 @@ public class VectorStore {
 
     record Hit(String content, double score) {}
 
+    //计算余弦相似度
     private double cosine(float[] a, float[] b) {
         double dot = 0, na = 0, nb = 0;
         for (int i = 0; i < a.length; i++) {

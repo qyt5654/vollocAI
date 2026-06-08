@@ -6,8 +6,11 @@ import com.vollocAI.ai.model.dao.ModelAssignmentDao;
 import com.vollocAI.ai.model.DatabaseAiService;
 import com.vollocAI.ai.model.DatabaseAi;
 import com.vollocAI.ai.agent.UnifiedAgentService;
+import com.vollocAI.ai.llm.AiUtils;
 import com.vollocAI.ai.llm.IntentRecognitionService;
 import com.vollocAI.ai.llm.MultimodalAIService;
+
+import org.springframework.ai.chat.model.ChatModel;
 import com.vollocAI.ai.task.AiTask;
 import com.vollocAI.ai.task.AiTaskService;
 
@@ -48,9 +51,10 @@ public class AiTaskExecutor {
     private void run(String taskId, String query, Long userId, Long modelId, String sessionId) {
         aiTaskService.updateStatus(taskId, AiTask.STATUS_PROCESSING);
         try {
-            IntentRecognitionService.IntentResult intent = intentRecognitionService.recognize(query);
-            aiTaskService.update(task(taskId, intent.intent(), null, null));
             Cred cred = resolve(modelId, userId);
+            ChatModel md = AiUtils.model(cred.key, cred.url, cred.model);
+            IntentRecognitionService.IntentResult intent = intentRecognitionService.recognize(query, md);
+            aiTaskService.update(task(taskId, intent.intent(), null, null));
             List<Map<String, String>> history = loadHistory(sessionId);
             String q = intent.content();
 

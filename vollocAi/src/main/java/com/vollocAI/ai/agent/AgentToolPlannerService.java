@@ -21,14 +21,28 @@ import java.util.stream.Collectors;
 public class AgentToolPlannerService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentToolPlannerService.class);
-    @Resource private ChatModel chatModel;
+
+    /** ThreadLocal：AgentExecutor 在执行前注入动态模型，工具调用时取出使用 */
+    private static final ThreadLocal<ChatModel> currentModel = new ThreadLocal<>();
+
     @Resource private ToolRegistry toolRegistry;
 
+    public static void setModel(ChatModel model) { currentModel.set(model); }
+    public static void clearModel() { currentModel.remove(); }
+    public static ChatModel getModel() { return currentModel.get(); }
+
     public String planAndExecute(String userQuery, String taskContext) {
-        String toolList = toolRegistry.getToolDescriptions().entrySet().stream()
+        ChatModel model = currentModel.get();
+        if (model == null) throw new IllegalStateException("未设置动态模型，请通过 AgentExecutor.run() 调用");
+        return planAndExecute(userQuery, taskContext, model);
+    }
+
+    public String planAndExecute(String userQuery, String taskContext, ChatModel model) {
+        // DEEP 模式子规划器：只暴露 DEEP 模式下可见的工具
+        String toolList = toolRegistry.getToolDescriptions(ToolMode.DEEP).entrySet().stream()
                 .map(e -> "- " + e.getKey() + ": " + e.getValue()).collect(Collectors.joining("\n"));
 
-        String raw = chatModel.call(new Prompt(List.of(
+        String raw = model.call(new Prompt(List.of(
                 new SystemMessage("""
                     根据用户问题与任务上下文，决定需要调用哪些工具收集证据（0个或多个）。
                     只输出 JSON，不要 markdown：
@@ -47,11 +61,11 @@ public class AgentToolPlannerService {
             JSONObject t = tools.getJSONObject(i);
             if (t == null) continue;
             String name = t.getString("name"), input = t.getString("input");
-            if (name == null || name.isBlank() || !toolRegistry.getAllToolNames().contains(name)) continue;
+            if (name == null || name.isBlank() || !toolRegistry.getAllToolNames(ToolMode.DEEP).contains(name)) continue;
             String arg = input != null && !input.isBlank() ? input : userQuery;
             long t0 = System.nanoTime();
             try {
-                String out = toolRegistry.callTool(name, arg);
+                String out = toolRegistry.callTool(name, arg, ToolMode.DEEP);
                 long ms = (System.nanoTime() - t0) / 1_000_000L;
                 sb.append("### ").append(name).append(" (").append(ms).append("ms)\n")
                         .append(Objects.toString(out, "")).append("\n\n");

@@ -3,7 +3,6 @@ package com.vollocAI.ai.llm;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.vollocAI.ai.agent.ReactProtocol;
-import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -19,15 +18,7 @@ import java.util.List;
 public class IntentRecognitionService {
 
     private static final Logger log = LoggerFactory.getLogger(IntentRecognitionService.class);
-    @Resource private ChatModel chatModel;
 
-//    private static final String PROMPT = """
-//        分析用户输入，返回 JSON（不要 markdown）：
-//        {"intent":"text|image|voice","content":"提炼后的内容","deep":true|false}
-//        - 画图/生成图片→image，朗读/语音→voice
-//        - deep=true: 多步调查、根因分析、故障复盘、运维报告、综合排查
-//        - deep=false: 普通问答、概念解释、简单计算、闲聊
-//        """;
     private static final String PROMPT = """
         分析用户输入，返回 JSON（不要 markdown）：
         {"intent":"text|image|voice","content":"原始问题原文","deep":true|false}
@@ -46,8 +37,8 @@ public class IntentRecognitionService {
           绝大多数日常提问为deep=false
         """;
 
-    public IntentResult recognize(String query) {
-        String raw = chatModel.call(new Prompt(List.of(
+    public IntentResult recognize(String query, ChatModel model) {
+        String raw = model.call(new Prompt(List.of(
                 new SystemMessage(PROMPT), new UserMessage(query)
         ))).getResult().getOutput().getContent();
         log.info("意图识别: {}", raw);

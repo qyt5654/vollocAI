@@ -37,53 +37,16 @@ public class MultimodalAIServiceImpl implements MultimodalAIService {
 
     private static final Logger logger = LoggerFactory.getLogger(MultimodalAIServiceImpl.class);
     private static final String VOICE_FILE_PATH = "/Users/yipingchuan/voice/";
-    @org.springframework.beans.factory.annotation.Value("${spring.ai.dashscope.api-key}")
-    private String dashScopeKey;
-
-    @Override
-    public reactor.core.publisher.Flux<String> streamChat(String query, String apiKey,
-                                                           String apiUrl, String modelName) {
-        return reactor.core.publisher.Flux.defer(() -> {
-            ChatModel model = buildModel(apiKey, apiUrl, modelName);
-            return model.stream(new Prompt(new UserMessage(query)))
-                    .map(r -> { String c = r.getResult().getOutput().getContent(); return c != null ? c : ""; })
-                    .filter(s -> !s.isEmpty());
-        });
-    }
-
-    @Override
-    public reactor.core.publisher.Flux<String> streamChat(String query, String apiKey,
-            String apiUrl, String modelName, List<Map<String, String>> history) {
-        return reactor.core.publisher.Flux.defer(() -> {
-            ChatModel model = buildModel(apiKey, apiUrl, modelName);
-            List<Message> messages = new ArrayList<>();
-            if (history != null) {
-                logger.info("streamChat 带历史 {} 轮", history.size() / 2);
-                for (Map<String, String> m : history) {
-                    if ("user".equals(m.get("role")))
-                        messages.add(new UserMessage(m.get("content")));
-                    else if ("assistant".equals(m.get("role")))
-                        messages.add(new AssistantMessage(m.get("content")));
-                }
-            }
-            messages.add(new UserMessage(query));
-            return model.stream(new Prompt(messages))
-                    .map(r -> { String c = r.getResult().getOutput().getContent(); return c != null ? c : ""; })
-                    .filter(s -> !s.isEmpty());
-        });
-    }
 
     @Override
     public String generateImage(String query, String apiKey, String apiUrl, String modelName) {
-        // 图片生成使用 DashScope wanx-v1 模型，依赖 application.yaml 中 spring.ai.dashscope.api-key
-        // 不能用用户选的文本模型（qwen3-max 等），文本模型没有图片生成能力
-        return generateImageWithDashScope(query);
+        return generateImageWithDashScope(query, apiKey);
     }
 
     private static final String DASHSCOPE_IMG_URL = "https://dashscope.aliyuncs.com/api/v1/services/aigc/text2image/image-synthesis";
     private static final String DASHSCOPE_TASK_URL = "https://dashscope.aliyuncs.com/api/v1/tasks/";
 
-    private String generateImageWithDashScope(String query) {
+    private String generateImageWithDashScope(String query, String apiKey) {
         try {
             java.util.LinkedHashMap<String, Object> body = new java.util.LinkedHashMap<>();
             body.put("model", "wanx-v1");
@@ -96,7 +59,7 @@ public class MultimodalAIServiceImpl implements MultimodalAIService {
             body.put("parameters", params);
 
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
-            headers.setBearerAuth(dashScopeKey);
+            headers.setBearerAuth(apiKey);
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
             headers.set("X-DashScope-Async", "enable"); // 异步模式: DashScope要求异步调用
             org.springframework.http.HttpEntity<?> request = new org.springframework.http.HttpEntity<>(body, headers);
@@ -148,14 +111,5 @@ public class MultimodalAIServiceImpl implements MultimodalAIService {
         catch (IOException e) { logger.error("语音写入失败", e); return "语音生成失败: " + e.getMessage(); }
         logger.info("语音生成 [{}]: {}", modelName, path);
         return path;
-    }
-
-    private ChatModel buildModel(String apiKey, String apiUrl, String modelName) {
-        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
-        factory.setConnectTimeout(java.time.Duration.ofSeconds(10));
-        factory.setReadTimeout(java.time.Duration.ofSeconds(60));
-        RestClient.Builder rc = RestClient.builder().requestFactory(factory);
-        return new OpenAiChatModel(new OpenAiApi(apiUrl, apiKey, rc, WebClient.builder()),
-                OpenAiChatOptions.builder().withModel(modelName).build());
     }
 }

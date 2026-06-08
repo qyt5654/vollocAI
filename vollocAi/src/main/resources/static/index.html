@@ -419,14 +419,40 @@
         .md { line-height: 1.7; font-size: 15px; }
         .md p { margin: 0 0 10px; }
         .md p:last-child { margin-bottom: 0; }
-        .md code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 13px; font-family: var(--mono); }
-        .md pre { background: #1e1e2e; color: #e2e8f0; padding: 14px 16px; border-radius: var(--radius); overflow-x: auto; margin: 10px 0; font-size: 13px; }
-        .md pre code { background: none; padding: 0; color: inherit; }
+        /* 行内代码 */
+        .md code {
+            background: #1e1e2e;
+            color: #e2e8f0;
+            border: 1px solid rgba(128,128,160,.15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 13px;
+            font-family: var(--mono);
+        }
+
+        /* 代码块（你原来的已经是对的，确认一致） */
+        .md pre {
+            background: #1e1e2e;
+            color: #e2e8f0;
+            padding: 14px 16px;
+            border-radius: var(--radius);
+            overflow-x: auto;
+            margin: 10px 0;
+            font-size: 13px;
+            border: 1px solid rgba(128,128,160,.12);  /* 可选：加边框与行内代码统一 */
+        }
+        .md pre code {
+            background: none;
+            padding: 0;
+            color: inherit;
+            border: none;  /* 代码块内的行内样式不要边框 */
+        }
         .md ul, .md ol { margin: 8px 0; padding-left: 22px; }
         .md h1, .md h2, .md h3 { margin: 14px 0 8px; font-weight: 600; }
         .md h1 { font-size: 1.25em; } .md h2 { font-size: 1.1em; }
         .md blockquote { border-left: 3px solid var(--c-accent); padding-left: 14px; color: var(--c-muted); margin: 10px 0; }
         .md a { color: var(--c-accent); }
+        .stream-tail { opacity: .6; }
         .search-sources { margin-top: 12px; width: 100%; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-sm); overflow: hidden; }
         .search-sources-head { padding: 8px 14px; font-size: 11px; font-weight: 500; color: var(--c-muted); border-bottom: 1px solid var(--c-border); }
         .search-item { display: flex; flex-direction: column; padding: 10px 14px; text-decoration: none; color: var(--c-text); border-bottom: 1px solid var(--c-border); transition: background .15s; }
@@ -527,7 +553,7 @@
                                     <span class="typing-dots" aria-label="正在生成"><span></span><span></span><span></span></span>
                                     思考中
                                 </div>
-                                <div v-else-if="m.role==='assistant'" class="bubble-content md" v-html="renderMd(m.text)"></div>
+                                <div v-else-if="m.role==='assistant'" class="bubble-content md"><span v-html="m.safeHtml || renderMd(m.text)"></span><span class="stream-tail">{{ m.typingTail }}</span></div>
                                 <div v-else class="bubble-content">{{ m.text }}</div>
 
                                 <div v-if="m.role==='assistant' && m.steps && m.steps.length" class="react-wrap">
@@ -782,6 +808,8 @@ createApp({
                     time: new Date().toLocaleTimeString(),
                     steps: [...steps], reactOpen: prev.reactOpen ?? steps.length > 0,
                     reactStatus: reactStatus || (planBuf ? '调度输出中…' : ''),
+                    safeHtml: extra.safeHtml !== undefined ? extra.safeHtml : streamRender.render(fullText),
+                    typingTail: extra.typingTail !== undefined ? extra.typingTail : streamRender.getTail(),
                     ...extra
                 };
                 nextTick(() => { if (chatArea.value) chatArea.value.scrollTop = chatArea.value.scrollHeight; });
@@ -795,7 +823,7 @@ createApp({
                     if (closed) return;
                     if (!e.data) return;
                     const ch = e.data === '<NL>' ? '\n' : e.data;
-                    if (ch === '[DONE]') { es.close(); closed = true; fullText = cleanJsonText(fullText); patch(); done(); loadSessions();
+                    if (ch === '[DONE]') { es.close(); closed = true; fullText = cleanJsonText(fullText); streamRender.reset(); patch({ safeHtml: null, typingTail: '' }); done(); loadSessions();
                         const isImage = /^https?:\/\/.+\.(png|jpg|jpeg|gif|webp)(\?.*)?$/.test(fullText) || fullText.startsWith('https://dashscope.aliyuncs.com/'); const isAudio = fullText.startsWith('/Users/') && fullText.endsWith('.mp3');
                         const msg = messages.value[placeholderIdx]; if (msg) { msg.image = isImage ? fullText : null; msg.audio = isAudio ? fullText : null; if (isImage || isAudio) msg.text = ''; }
                         return; }
@@ -900,7 +928,9 @@ createApp({
             if (!t || t === '...') return '';
             try {
                 const mathBlocks = [];
-                let protected_ = t
+                // 预处理: ###Title → ### Title（marked 要求标题#后有空格）
+                let pre = t.replace(/(^|\n)(#{1,6})([^\s#])/g, '$1$2 $3');
+                let protected_ = pre
                     .replace(/\$\$([\s\S]*?)\$\$|\\\[([\s\S]*?)\\\]/g, (m, d1, d2) => {
                         mathBlocks.push({ display: true, tex: (d1 || d2).trim() });
                         return `\n[MATH${mathBlocks.length - 1}]\n`;
@@ -915,7 +945,6 @@ createApp({
                         return `[MATH${mathBlocks.length - 1}]`;
                     });
                 let html = (typeof marked !== "undefined" && marked.parse) ? marked.parse(protected_, { breaks: true }) : protected_.replace(/\n/g, "<br>");
-                html = html.replace(/<p>(#{1,6})\s+(.+?)<\/p>/g, (_, h, txt) => "<h" + h.length + ">" + txt + "</h" + h.length + ">");
                 html = html.replace(/\[MATH(\d+)\]/g, (_, i) => {
                     const b = mathBlocks[parseInt(i)];
                     try { return katex.renderToString(b.tex, { displayMode: b.display, throwOnError: false }); }
@@ -924,6 +953,80 @@ createApp({
                 return html;
             } catch (e) { return t; }
         };
+
+        const escapeHtml = (s) => { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; };
+
+        // 找Markdown语法完整的最长前缀位置（纯字符串遍历，不用lookbehind正则）
+        const findSafeEnd = (text) => {
+            // 数指定子串在字符串中出现的次数（不重叠）
+            const count = (str, sub) => { let n = 0, pos = 0; while ((pos = str.indexOf(sub, pos)) >= 0) { n++; pos += sub.length; } return n; };
+            // 单*斜体：排除**情况。从前往后扫，数未配对的*
+            const unbalancedSingleStar = (str) => {
+                let starCount = 0, i = 0;
+                while (i < str.length) {
+                    if (str[i] === '*' && str[i+1] === '*') { i += 2; continue; }
+                    if (str[i] === '*') starCount++;
+                    i++;
+                }
+                return starCount % 2;
+            };
+            // 行内代码`：排除``情况
+            const unbalancedBacktick = (str) => {
+                let tick = 0, i = 0;
+                while (i < str.length) {
+                    if (str[i] === '`' && str[i+1] === '`') { i += 2; continue; }
+                    if (str[i] === '`') tick++;
+                    i++;
+                }
+                return tick % 2;
+            };
+
+            // 从后往前扫描
+            for (let i = text.length; i >= 0; i--) {
+                const p = text.substring(0, i);
+                // **粗体** 成对
+                if (count(p, '**') % 2 !== 0) continue;
+                // *斜体* 成对（排除**干扰）
+                if (unbalancedSingleStar(p)) continue;
+                // `行内代码` 成对（排除``干扰）
+                if (unbalancedBacktick(p)) continue;
+                // ```代码块``` 成对
+                if (count(p, '```') % 2 !== 0) continue;
+
+                // 检查标题完整性（支持 ### Title 和 ###Title 两种格式）
+                const lastHash = p.match(/\n(#{1,6})([^\n]*)$/);
+                if (lastHash) {
+                    const after = lastHash[2];
+                    // ### 后跟了非空文字 → 安全（有空格或没空格都认）
+                    if (after.trim().length > 0) return i;
+                    // ### 后只有空格或为空 → 不安全，退回标题前
+                    return p.lastIndexOf('\n' + lastHash[1]);
+                }
+
+                // 结尾是空行（\n\n）安全
+                if (p.endsWith('\n\n') && p.length > 1) return i;
+                if (i === 0) return 0;
+            }
+            return 0;
+        };
+
+        const streamRender = (() => {
+            let cachedHtml = '', safeLen = 0, tailText = '';
+            function reset() { cachedHtml = ''; safeLen = 0; tailText = ''; }
+            function render(text) {
+                if (!text) return '';
+                const safeEnd = findSafeEnd(text);
+                // 只在新安全边界扩展时才重新解析
+                if ((safeEnd > safeLen) && safeEnd > 0) {
+                    cachedHtml = renderMd(text.substring(0, safeEnd));
+                    safeLen = safeEnd;
+                }
+                tailText = text.substring(safeLen);
+                return cachedHtml; // 只返回安全部分的HTML
+            }
+            function getTail() { return tailText; }
+            return { render, reset, getTail };
+        })();
 
         const showModels = ref(false);
         const showAssign = ref(false);
