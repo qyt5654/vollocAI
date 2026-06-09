@@ -52,7 +52,7 @@ public class AiTaskExecutor {
         aiTaskService.updateStatus(taskId, AiTask.STATUS_PROCESSING);
         try {
             Cred cred = resolve(modelId, userId);
-            ChatModel md = AiUtils.model(cred.key, cred.url, cred.model);
+            ChatModel md = AiUtils.model(cred.key, cred.url, cred.model,120);
             IntentRecognitionService.IntentResult intent = intentRecognitionService.recognize(query, md);
             aiTaskService.update(task(taskId, intent.intent(), null, null));
             List<Map<String, String>> history = loadHistory(sessionId);
