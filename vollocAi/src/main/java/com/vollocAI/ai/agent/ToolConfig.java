@@ -24,7 +24,6 @@ public class ToolConfig {
 
     @Autowired private ToolRegistry registry;
     @Autowired private DocumentService documentService;
-    @Autowired private AgentToolPlannerService toolPlanner;
     @Autowired(required = false) private McpSearchService mcpSearch;
     @Autowired(required = false) private McpClientManager mcpManager;
 
@@ -36,10 +35,6 @@ public class ToolConfig {
         registry.register("getCurrentDateTime", "获取当前日期和时间",     ToolMode.ALL,  args -> LocalDateTime.now().toString());
         registry.register("calculate",          "执行数学计算",           ToolMode.ALL,  this::calc);
         registry.register("queryInternalDocs",  "搜索本项目知识库",       ToolMode.DEEP, documentService::searchAndFormat);
-        registry.register("deep_research",      "多步调查分析（DEEP模式专用）", ToolMode.DEEP, args -> {
-            String[] parts = args.split("\\|", 2);
-            return toolPlanner.planAndExecute(parts[0], parts.length > 1 ? parts[1] : "调查步骤");
-        });
 
         // ── 联网搜索（内置实现，不需要 MCP Server）──
         if (mcpSearch != null) registry.register("webSearch", "联网搜索最新信息", ToolMode.ALL, mcpSearch::search);

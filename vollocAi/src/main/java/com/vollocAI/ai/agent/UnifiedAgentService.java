@@ -35,6 +35,7 @@ public class UnifiedAgentService {
 
     @Resource private ToolRegistry tools;
     @Resource private ToolCaller caller;
+    @Resource private AgentToolPlannerService toolPlanner;
     @Value("${volloc.agent.tool-timeout:30000}") private long toolTimeout;
 
     // ======================== Prompts ========================
@@ -51,10 +52,19 @@ public class UnifiedAgentService {
             + "只引用资料中已存在的内容, 严禁编造。无相关资料直接说: 本步未找到相关信息。150字内。";
 
     /** DEEP 反思者：LLM 自判断是否结束，不做二次校验 */
-    static final String REPLAN_PROMPT = "评估进展。只有在已有充足信息完全回答用户问题时才返回FINISH。"
-            + "通常情况返回CONTINUE。不要过早结束。"
-            + "返回JSON：{\"decision\":\"CONTINUE|ADJUST|FINISH\","
-            + "\"adjusted_step\":\"仅ADJUST时填写\",\"reason\":\"...\"}";
+    static final String REPLAN_PROMPT = """
+            评估进展。
+            
+            【重要】如果原始问题是要求"制定计划/学习路线/分阶段方案"，必须执行完全部步骤，
+            确保返回结果覆盖所有规划的阶段。不要提前结束。
+            
+            优先继续执行剩余步骤，只有在已有充足信息完全回答用户问题时才返回FINISH。
+            
+            其他情况：只有在已有充足信息完全回答用户问题时才返回 FINISH。
+            通常情况返回 CONTINUE。
+            
+            返回JSON：{"decision":"CONTINUE|FINISH","reason":"..."}
+            """;
 
     // ======================== 入口 ========================
 
@@ -62,28 +72,29 @@ public class UnifiedAgentService {
         return ReactProtocol.isEvent(t);
     }
 
-    public Flux<String> execute(boolean deep, String query, String apiKey,
-                                 String apiUrl, String model,
-                                 List<Map<String, String>> history) {
+    public Flux<String> execute(boolean deep, String query, String apiKey, String apiUrl,
+                                String model, List<Map<String, String>> history) {
+
+        ChatModel md = AiUtils.model(apiKey, apiUrl, model, 120);
+
+        ArrayList<Message> msgs = new ArrayList<>();
+        msgs.addAll(AiUtils.toMessages(history));
+        msgs.add(new UserMessage(query));
+
         return Flux.create(s -> {
             if (deep) {
                 // ======================== DEEP ========================
                 AgentContext ctx = new AgentContext(AiUtils.toMessages(history));
                 ctx.cancelled.set(false);
                 try {
-                    ChatModel md = AiUtils.model(apiKey, apiUrl, model, 120);
-
-                    // ① Supervisor 制定调查计划
-                    ArrayList<Message> msgs = new ArrayList<>();
+                    // Supervisor 制定调查计划
                     msgs.add(new SystemMessage(SUPER_PROMPT));
-                    msgs.addAll(AiUtils.toMessages(history));
-                    msgs.add(new UserMessage(query));
                     String planRaw = AiUtils.call(md, new Prompt(msgs));
                     JSONObject plan = planRaw.isEmpty() ? null : AiUtils.parseJson(planRaw);
                     if (plan == null) plan = fallback(query);
 
                     List<String> steps = steps(plan);
-                    AgentExecutor exec = new AgentExecutor(tools, caller, toolTimeout);
+                    AgentExecutor exec = new AgentExecutor(tools, caller, toolPlanner, toolTimeout);
                     exec.run(md, ctx, s, exec.DEEP, query, new ArrayList<>(), steps);
                 } catch (Exception e) {
                     log.error("[DEEP] failed", e);
@@ -96,16 +107,13 @@ public class UnifiedAgentService {
                         .entrySet().stream()
                         .map(e -> "- " + e.getKey() + ": " + e.getValue())
                         .collect(Collectors.joining("\n"));
-                ArrayList<Message> p = new ArrayList<>();
-                p.add(new SystemMessage(
+
+                msgs.add(new SystemMessage(
                         "工具调度器，只输出JSON。\n可用工具：\n" + tl
                                 + "\n能直接回答→{\"type\":\"final\"}；需工具→{\"type\":\"tool\",\"name\":\"x\",\"input\":\"y\"}"));
-                p.addAll(AiUtils.toMessages(history));
-                p.add(new UserMessage(query));
-                p.add(new SystemMessage(ANSWER));
-                AgentContext ctx = new AgentContext(p);
-                AgentExecutor exec = new AgentExecutor(tools, caller, toolTimeout);
-                ChatModel md = AiUtils.model(apiKey, apiUrl, model);
+                msgs.add(new SystemMessage(ANSWER));
+                AgentContext ctx = new AgentContext(msgs);
+                AgentExecutor exec = new AgentExecutor(tools, caller, toolPlanner, toolTimeout);
 
                 exec.run(md, ctx, s, exec.SIMPLE, null, null, null);
             }

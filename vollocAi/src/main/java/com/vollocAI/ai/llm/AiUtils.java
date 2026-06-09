@@ -39,11 +39,6 @@ public final class AiUtils {
         return l;
     }
 
-    /** 构建模型（带缓存），readTimeout=60s */
-    public static ChatModel model(String apiKey, String apiUrl, String modelName) {
-        return model(apiKey, apiUrl, modelName, 60);
-    }
-
     /** 构建模型（带缓存） */
     public static ChatModel model(String apiKey, String apiUrl, String modelName, int readTimeoutSec) {
         String k = apiUrl + "|" + modelName;

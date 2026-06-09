@@ -16,29 +16,22 @@ import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-/** LLM 选工具 + 代码执行，供 Supervisor 等场景使用 */
+/** DEEP 模式工具规划器：LLM 决定调用哪些工具收集证据，然后执行。 */
 @Service
 public class AgentToolPlannerService {
 
     private static final Logger log = LoggerFactory.getLogger(AgentToolPlannerService.class);
 
-    /** ThreadLocal：AgentExecutor 在执行前注入动态模型，工具调用时取出使用 */
-    private static final ThreadLocal<ChatModel> currentModel = new ThreadLocal<>();
-
     @Resource private ToolRegistry toolRegistry;
 
-    public static void setModel(ChatModel model) { currentModel.set(model); }
-    public static void clearModel() { currentModel.remove(); }
-    public static ChatModel getModel() { return currentModel.get(); }
-
-    public String planAndExecute(String userQuery, String taskContext) {
-        ChatModel model = currentModel.get();
-        if (model == null) throw new IllegalStateException("未设置动态模型，请通过 AgentExecutor.run() 调用");
-        return planAndExecute(userQuery, taskContext, model);
-    }
-
+    /**
+     * 制定工具计划并执行。ChatModel 通过参数显式传入（无状态设计）。
+     *
+     * @param userQuery   用户原始问题
+     * @param taskContext 当前步骤上下文
+     * @param model       当前会话的动态 ChatModel
+     */
     public String planAndExecute(String userQuery, String taskContext, ChatModel model) {
-        // DEEP 模式子规划器：只暴露 DEEP 模式下可见的工具
         String toolList = toolRegistry.getToolDescriptions(ToolMode.DEEP).entrySet().stream()
                 .map(e -> "- " + e.getKey() + ": " + e.getValue()).collect(Collectors.joining("\n"));
 
