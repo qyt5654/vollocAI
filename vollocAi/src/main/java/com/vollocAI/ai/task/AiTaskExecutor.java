@@ -9,6 +9,8 @@ import com.vollocAI.ai.agent.UnifiedAgentService;
 import com.vollocAI.ai.llm.AiUtils;
 import com.vollocAI.ai.llm.IntentRecognitionService;
 import com.vollocAI.ai.llm.MultimodalAIService;
+import com.vollocAI.ai.memory.MemoryService;
+import com.vollocAI.ai.memory.MemoryQueryResult;
 
 import org.springframework.ai.chat.model.ChatModel;
 import com.vollocAI.ai.task.AiTask;
@@ -43,6 +45,7 @@ public class AiTaskExecutor {
     @Resource(name = "aiThreadPool") private ThreadPoolExecutor threadPool;
     @Resource private StringRedisTemplate redis;
     @Resource private RedissonClient redissonClient;
+    @Resource private MemoryService memoryService;
 
     public void execute(String taskId, String query, Long userId, Long modelId, String sessionId) {
         threadPool.execute(() -> run(taskId, query, userId, modelId, sessionId));
@@ -52,10 +55,13 @@ public class AiTaskExecutor {
         aiTaskService.updateStatus(taskId, AiTask.STATUS_PROCESSING);
         try {
             Cred cred = resolve(modelId, userId);
-            ChatModel md = AiUtils.model(cred.key, cred.url, cred.model,120);
-            IntentRecognitionService.IntentResult intent = intentRecognitionService.recognize(query, md);
+            ChatModel md = AiUtils.model(cred.key, cred.url, cred.model,120, 0.7, 0.7);
+            // 1. 先加载记忆上下文（短记忆 + 长记忆），供意图识别参考
+            MemoryQueryResult memCtx = memoryService.loadContext(sessionId, query);
+            String memText = memCtx.toContextText();
+            // 2. 带记忆上下文进行意图识别（帮助判断 deep/simple，识别话题延续）
+            IntentRecognitionService.IntentResult intent = intentRecognitionService.recognize(query, md, memText);
             aiTaskService.update(task(taskId, intent.intent(), null, null));
-            List<Map<String, String>> history = loadHistory(sessionId);
             String q = intent.content();
 
             switch (intent.intent()) {
@@ -72,7 +78,7 @@ public class AiTaskExecutor {
                 default -> {
                     String streamKey = "stream:" + taskId + ":q";
                     StringBuilder sb = new StringBuilder();
-                    unifiedAgentService.execute(intent.deep(), q, cred.key, cred.url, cred.model, history)
+                    unifiedAgentService.execute(intent.deep(), q, cred.key, cred.url, cred.model, memCtx)
                             .doOnNext(t -> {
                                 redis.opsForList().rightPush(streamKey, t);
                                 if (!UnifiedAgentService.isProtocolEvent(t)) sb.append(t);
@@ -112,6 +118,8 @@ public class AiTaskExecutor {
         String finalAnswer = clean.isEmpty() ? answer : clean;
         saveHistory(sessionId, query, finalAnswer);
         saveSession(sessionId, userId, query);
+        // 结构化记忆：写入短记忆（内部触发压缩 + 增量摘要）
+        memoryService.saveRound(sessionId, query, finalAnswer, getRoundNum(sessionId));
         redis.opsForValue().set("ai:result:" + taskId, finalAnswer, 10, TimeUnit.MINUTES);
         aiTaskService.update(task(taskId, null, finalAnswer, AiTask.STATUS_COMPLETED));
     }
@@ -145,7 +153,7 @@ public class AiTaskExecutor {
         return new Cred(cfg.getAiApiKey(), cfg.getAiApiUrl(), cfg.getAiApiModel());
     }
 
-    // ── History (unchanged) ──
+    // History
     private List<Map<String, String>> loadHistory(String sid) {
         if (sid == null || sid.isEmpty()) return List.of();
         String k = "session:" + sid + ":history";
@@ -215,5 +223,13 @@ public class AiTaskExecutor {
         String m = e.getMessage();
         if (m == null || m.isBlank()) m = e.getClass().getSimpleName();
         return m.length() > 200 ? m.substring(0,200)+"..." : m;
+    }
+
+    /** 估算 session 当前轮数（消息数 / 2 取整） */
+    private int getRoundNum(String sessionId) {
+        if (sessionId == null || sessionId.isEmpty()) return 0;
+        Long size = redis.opsForList().size("session:" + sessionId + ":wm");
+        if (size == null || size <= 0) size = redis.opsForList().size("session:" + sessionId + ":history");
+        return size == null || size <= 0 ? 0 : (int) Math.ceil(size.doubleValue() / 2.0);
     }
 }

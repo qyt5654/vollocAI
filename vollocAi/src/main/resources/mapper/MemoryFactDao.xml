@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vollocAI.ai.memory.dao.MemoryFactDao">
+
+    <resultMap id="MemoryFactMap" type="com.vollocAI.ai.memory.model.MemoryFact">
+        <result property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="factType" column="fact_type"/>
+        <result property="factContent" column="fact_content"/>
+        <result property="embedding" column="embedding"/>
+        <result property="confidence" column="confidence"/>
+        <result property="source" column="source"/>
+        <result property="tags" column="tags"/>
+        <result property="eventTime" column="event_time"/>
+        <result property="decayFactor" column="decay_factor"/>
+        <result property="status" column="status"/>
+        <result property="createTime" column="create_time"/>
+        <result property="updateTime" column="update_time"/>
+    </resultMap>
+
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        insert into memory_fact(user_id, session_id, fact_type, fact_content, embedding,
+                                confidence, source, tags, event_time, decay_factor, status, create_time, update_time)
+        values (#{userId}, #{sessionId}, #{factType}, #{factContent}, #{embedding},
+                #{confidence}, #{source}, #{tags}, #{eventTime}, #{decayFactor}, #{status}, now(), now())
+    </insert>
+
+    <select id="findById" resultMap="MemoryFactMap">
+        select * from memory_fact where id = #{id}
+    </select>
+
+    <select id="findBySessionId" resultMap="MemoryFactMap">
+        select * from memory_fact
+        where session_id = #{sessionId} and status = 'ACTIVE'
+        order by create_time desc
+    </select>
+
+    <select id="findByUserAndType" resultMap="MemoryFactMap">
+        select * from memory_fact
+        where user_id = #{userId} and fact_type = #{factType} and status = 'ACTIVE'
+        order by confidence desc, create_time desc
+    </select>
+
+    <select id="findPreferencesBySession" resultMap="MemoryFactMap">
+        select * from memory_fact
+        where session_id = #{sessionId} and status = 'ACTIVE' and fact_type = 'PREFERENCE'
+        order by confidence desc
+    </select>
+
+    <select id="findByUser" resultMap="MemoryFactMap">
+        select * from memory_fact
+        where user_id = #{userId} and status = 'ACTIVE'
+        order by
+            field(fact_type, 'PREFERENCE', 'FACT', 'EVENT'),
+            (1.0 - decay_factor) * confidence desc
+        limit #{limit}
+    </select>
+
+    <select id="searchBySession" resultMap="MemoryFactMap">
+        select * from memory_fact
+        where session_id = #{sessionId} and status = 'ACTIVE'
+          and fact_content like concat('%', #{keyword}, '%')
+        order by (1.0 - decay_factor) * confidence desc
+        limit #{limit}
+    </select>
+
+    <select id="findAllActiveByUser" resultMap="MemoryFactMap">
+        select * from memory_fact
+        where user_id = #{userId} and status = 'ACTIVE'
+    </select>
+
+    <update id="updateStatus">
+        update memory_fact set status = #{status}, fact_content = #{factContent},
+               decay_factor = #{decayFactor}, update_time = now()
+        where id = #{id}
+    </update>
+
+    <update id="batchUpdateDecay">
+        update memory_fact
+        set decay_factor = case
+            when event_time is null then 0.0
+            else least(1.0, 1.0 - exp(-0.05 * greatest(0, datediff(now(), event_time))))
+        end,
+        update_time = now()
+        where user_id = #{userId}
+          and status = 'ACTIVE'
+          and fact_type = 'EVENT'
+    </update>
+
+    <select id="findSimilarByContent" resultMap="MemoryFactMap">
+        select * from memory_fact
+        where user_id = #{userId} and status = 'ACTIVE'
+          and fact_content like concat('%', #{content}, '%')
+        limit 5
+    </select>
+
+    <delete id="deleteBySessionId">
+        delete from memory_fact where session_id = #{sessionId}
+    </delete>
+
+</mapper>

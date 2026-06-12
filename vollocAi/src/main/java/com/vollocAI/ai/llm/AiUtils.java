@@ -40,7 +40,7 @@ public final class AiUtils {
     }
 
     /** 构建模型（带缓存） */
-    public static ChatModel model(String apiKey, String apiUrl, String modelName, int readTimeoutSec) {
+    public static ChatModel model(String apiKey, String apiUrl, String modelName, int readTimeoutSec, Double temperature, Double topP) {
         String k = apiUrl + "|" + modelName;
         return MODEL_CACHE.computeIfAbsent(k, key -> {
             SimpleClientHttpRequestFactory f = new SimpleClientHttpRequestFactory();
@@ -49,8 +49,13 @@ public final class AiUtils {
             OpenAiApi api = new OpenAiApi(apiUrl, apiKey, RestClient.builder().requestFactory(f), WebClient.builder());
             RetryTemplate retry = RetryTemplate.builder().maxAttempts(2).exponentialBackoff(1000, 2, 5000)
                     .retryOn(java.io.IOException.class).build();
-            return new OpenAiChatModel(api, OpenAiChatOptions.builder().withModel(modelName).build(),
-                    new org.springframework.ai.model.function.DefaultFunctionCallbackResolver(), List.of(), retry);
+            return new OpenAiChatModel(
+                    api,
+                    OpenAiChatOptions.builder().model(modelName).temperature(temperature).topP(topP).build(),
+                    new org.springframework.ai.model.function.DefaultFunctionCallbackResolver(),
+                    List.of(),
+                    retry
+            );
         });
     }
 

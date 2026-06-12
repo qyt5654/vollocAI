@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.vollocAI.ai.memory.dao.MemorySummaryDao">
+
+    <resultMap id="MemorySummaryMap" type="com.vollocAI.ai.memory.model.MemorySummary">
+        <result property="id" column="id"/>
+        <result property="userId" column="user_id"/>
+        <result property="sessionId" column="session_id"/>
+        <result property="summary" column="summary"/>
+        <result property="keyPoints" column="key_points"/>
+        <result property="tokenCount" column="token_count"/>
+        <result property="createTime" column="create_time"/>
+    </resultMap>
+
+    <select id="findBySessionId" resultMap="MemorySummaryMap">
+        select * from memory_summary where session_id = #{sessionId}
+    </select>
+
+    <select id="findByUserId" resultMap="MemorySummaryMap">
+        select * from memory_summary where user_id = #{userId}
+        order by create_time desc limit #{limit}
+    </select>
+
+    <insert id="insert" keyProperty="id" useGeneratedKeys="true">
+        insert into memory_summary(user_id, session_id, summary, key_points, token_count, create_time)
+        values (#{userId}, #{sessionId}, #{summary}, #{keyPoints}, #{tokenCount}, now())
+    </insert>
+
+    <update id="update">
+        update memory_summary
+        set summary = #{summary}, key_points = #{keyPoints}, token_count = #{tokenCount}
+        where session_id = #{sessionId}
+    </update>
+
+</mapper>

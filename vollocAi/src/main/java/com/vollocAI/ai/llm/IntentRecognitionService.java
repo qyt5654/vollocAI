@@ -37,9 +37,21 @@ public class IntentRecognitionService {
           绝大多数日常提问为deep=false
         """;
 
-    public IntentResult recognize(String query, ChatModel model) {
+
+    /**
+     * 带记忆上下文的意图识别 —— 历史信息帮助 LLM 更准确判断 deep/simple 和意图类型。
+     *
+     * @param query         用户当前输入
+     * @param model         LLM 模型
+     * @param memoryContext 记忆上下文文本（短记忆 + 长记忆），可为 null
+     */
+    public IntentResult recognize(String query, ChatModel model, String memoryContext) {
+        String systemPrompt = PROMPT;
+        if (memoryContext != null && !memoryContext.isBlank()) {
+            systemPrompt = PROMPT + "\n\n【用户历史记忆，辅助判断意图——判断这是否为新话题延续】\n" + memoryContext;
+        }
         String raw = model.call(new Prompt(List.of(
-                new SystemMessage(PROMPT), new UserMessage(query)
+                new SystemMessage(systemPrompt), new UserMessage(query)
         ))).getResult().getOutput().getContent();
         log.info("意图识别: {}", raw);
         JSONObject obj = parse(raw);

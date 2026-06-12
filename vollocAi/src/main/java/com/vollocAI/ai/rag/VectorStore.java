@@ -1,11 +1,9 @@
 package com.vollocAI.ai.rag;
 
+import com.vollocAI.ai.memory.embedding.SimpleEmbeddingService;
+import jakarta.annotation.Resource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.embedding.EmbeddingModel;
-import org.springframework.ai.embedding.EmbeddingRequest;
-import org.springframework.ai.embedding.EmbeddingOptions;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.*;
@@ -18,18 +16,13 @@ public class VectorStore {
     private static final Logger log = LoggerFactory.getLogger(VectorStore.class);
     private final List<Entry> store = new CopyOnWriteArrayList<>();
 
-    @Autowired(required = false)
-    private EmbeddingModel embeddingModel;
+    @Resource
+    private SimpleEmbeddingService embeddingService;
 
     record Entry(String docId, float[] embedding, String content) {}
 
     public List<float[]> embed(List<String> texts) {
-        if (embeddingModel == null) {
-            log.warn("EmbeddingModel 未配置，跳过向量化");
-            return texts.stream().map(t -> new float[0]).toList();
-        }
-        return embeddingModel.call(new EmbeddingRequest(texts, EmbeddingOptions.EMPTY))
-                .getResults().stream().map(r -> r.getOutput()).toList();
+        return embeddingService.embedBatch(texts);
     }
 
     public int add(String docId, List<String> chunks) {

@@ -11,10 +11,9 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
 
 import com.vollocAI.ai.llm.AiUtils;
-import com.vollocAI.ai.llm.IntentRecognitionService;
+import com.vollocAI.ai.memory.MemoryQueryResult;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -72,19 +71,28 @@ public class UnifiedAgentService {
         return ReactProtocol.isEvent(t);
     }
 
+    /** 新版入口：接受 MemoryQueryResult 作为结构化上下文 */
     public Flux<String> execute(boolean deep, String query, String apiKey, String apiUrl,
-                                String model, List<Map<String, String>> history) {
+                                String model, MemoryQueryResult memCtx) {
 
-        ChatModel md = AiUtils.model(apiKey, apiUrl, model, 120);
+        ChatModel md = AiUtils.model(apiKey, apiUrl, model, 120, 0.7, 0.7);
 
         ArrayList<Message> msgs = new ArrayList<>();
-        msgs.addAll(AiUtils.toMessages(history));
+
+        // 【新增】注入长记忆上下文（SystemMessage）
+        String contextText = memCtx.toContextText();
+        if (contextText != null && !contextText.isBlank()) {
+            msgs.add(new SystemMessage(contextText));
+        }
+
+        // 短记忆历史消息
+        msgs.addAll(AiUtils.toMessages(memCtx.getWorkingMessages()));
         msgs.add(new UserMessage(query));
 
         return Flux.create(s -> {
             if (deep) {
                 // ======================== DEEP ========================
-                AgentContext ctx = new AgentContext(AiUtils.toMessages(history));
+                AgentContext ctx = new AgentContext(AiUtils.toMessages(memCtx.getWorkingMessages()));
                 ctx.cancelled.set(false);
                 try {
                     // Supervisor 制定调查计划

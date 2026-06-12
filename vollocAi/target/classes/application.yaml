@@ -53,6 +53,13 @@ mcp:
   # 多个示例: text:python3 /path/text-server.py, sms:python3 /path/sms-server.py
 
 volloc:
+  memory:
+    working-memory-size: 20
+    working-memory-inject: 10
+    compress-threshold: 15
+    long-memory-top-k: 5
+    long-memory-min-score: 0.5
+    rounds-per-summary: 5
   agent:
     max-calls: 6
     max-steps: 10
